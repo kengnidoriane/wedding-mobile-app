@@ -44,6 +44,8 @@ const Button = memo<ButtonProps>(function Button({
       onPress={onPress} 
       disabled={disabled}
       activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
     >
       <Text style={textStyle}>
         {displayText}
