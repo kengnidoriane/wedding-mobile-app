@@ -2,7 +2,7 @@
  * Composant standardisé pour afficher les erreurs
  */
 
-import React from 'react';
+import React, { memo, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { theme } from '../styles/theme';
 import { ErrorState } from '../hooks/useErrorHandler';
@@ -14,18 +14,18 @@ interface ErrorDisplayProps {
   variant?: 'banner' | 'card' | 'inline';
 }
 
-export const ErrorDisplay: React.FC<ErrorDisplayProps> = ({
+export const ErrorDisplay = memo<ErrorDisplayProps>(function ErrorDisplay({
   error,
   onDismiss,
   onRetry,
   variant = 'card'
-}) => {
-  const containerStyle = [
+}) {
+  const containerStyle = useMemo(() => [
     styles.container,
     variant === 'banner' && styles.banner,
     variant === 'card' && styles.card,
     variant === 'inline' && styles.inline
-  ];
+  ], [variant]);
 
   return (
     <View style={containerStyle}>
@@ -53,7 +53,7 @@ export const ErrorDisplay: React.FC<ErrorDisplayProps> = ({
       </View>
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {

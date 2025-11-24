@@ -2,7 +2,7 @@
  * Composant standardisé pour les indicateurs de chargement
  */
 
-import React from 'react';
+import React, { memo, useMemo } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { theme } from '../styles/theme';
 
@@ -13,28 +13,30 @@ interface LoadingSpinnerProps {
   color?: string;
 }
 
-export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
+export const LoadingSpinner = memo<LoadingSpinnerProps>(function LoadingSpinner({
   size = 'large',
   text,
   variant = 'inline',
   color = theme.colors.primary
-}) => {
-  const containerStyle = [
+}) {
+  const containerStyle = useMemo(() => [
     styles.container,
     variant === 'overlay' && styles.overlay,
     variant === 'fullscreen' && styles.fullscreen,
     variant === 'inline' && styles.inline
-  ];
+  ], [variant]);
+
+  const textColor = useMemo(() => ({ color }), [color]);
 
   return (
     <View style={containerStyle}>
       <ActivityIndicator size={size} color={color} />
       {text && (
-        <Text style={[styles.text, { color }]}>{text}</Text>
+        <Text style={[styles.text, textColor]}>{text}</Text>
       )}
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {

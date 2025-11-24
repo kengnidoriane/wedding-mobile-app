@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { View, Text, FlatList, StyleSheet, TextInput, TouchableOpacity, RefreshControl, Modal, Alert, SafeAreaView, ActivityIndicator } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
@@ -9,6 +9,7 @@ import Card from '../components/Card';
 import { ErrorDisplay } from '../components/ErrorDisplay';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { LoadingButton } from '../components/LoadingButton';
+import GuestItem from '../components/GuestItem';
 import { useFirebaseGuests } from '../hooks/useFirebaseGuests';
 import { useErrorHandler } from '../hooks/useErrorHandler';
 import { CreateGuestData, SyncStatus } from '../types/guest';
@@ -181,64 +182,34 @@ export default function GuestListScreen({ navigation }: any) {
     const q = search.trim().toLowerCase();
     if (!q) return guests;
     return guests.filter((g) =>
-      (g.fullName || '').toLowerCase().includes(q) || 
-      (g.tableName || '').toLowerCase().includes(q) ||
+      g.fullName.toLowerCase().includes(q) || 
+      g.tableName.toLowerCase().includes(q) ||
       g.companions.toString().includes(q)
     );
   }, [search, guests]);
 
-  // Utiliser les statistiques du hook Firebase
-  const presentCount = stats?.present || 0;
-  const total = stats?.total || 0;
-  const absentCount = stats?.absent || 0;
-  const totalCompanions = stats?.totalCompanions || 0;
+  const statsData = useMemo(() => ({
+    presentCount: stats?.present || 0,
+    total: stats?.total || 0,
+    absentCount: stats?.absent || 0,
+    totalCompanions: stats?.totalCompanions || 0
+  }), [stats]);
 
-  const renderGuestItem = ({ item }: { item: any }) => {
-    const isPresent = item.isPresent;
-    return (
-      <Card style={styles.guestCard}>
-        <View style={styles.guestHeader}>
-          <Text style={styles.guestName}>{item.fullName}</Text>
-          <View style={[styles.statusBadge, isPresent ? styles.presentBadge : styles.absentBadge]}>
-            <Text style={[styles.statusText, isPresent ? styles.presentText : styles.absentText]}>
-              {isPresent ? '✅ Présent' : '⏳ Absent'}
-            </Text>
-          </View>
-        </View>
+  const handleShareQR = useCallback((guestId: string) => {
+    navigation.navigate('QRWhatsAppShare', { guestId });
+  }, [navigation]);
 
-        <View style={styles.guestInfo}>
-          <Text style={styles.infoItem}>📍 Table: {item.tableName}</Text>
-          <Text style={styles.infoItem}>👥 Accompagnants: {item.companions}</Text>
-        </View>
+  const renderGuestItem = useCallback(({ item }: { item: any }) => (
+    <GuestItem
+      guest={item}
+      onTogglePresence={toggleGuestPresence}
+      onDelete={handleDeleteGuest}
+      onShareQR={handleShareQR}
+      isLoading={isLoading}
+    />
+  ), [toggleGuestPresence, handleDeleteGuest, handleShareQR, isLoading]);
 
-        <View style={styles.guestActions}>
-          <LoadingButton
-            title={isPresent ? "Marquer absent" : "Marquer présent"}
-            onPress={() => toggleGuestPresence(item.id, item.fullName, isPresent)}
-            variant={isPresent ? "outline" : "primary"}
-            size="sm"
-            icon={isPresent ? "❌" : "✅"}
-            loading={isLoading('markPresent') || isLoading('markAbsent')}
-          />
-          <Button
-            title="Partager QR"
-            onPress={() => navigation.navigate('QRWhatsAppShare', { guestId: item.id })}
-            variant="secondary"
-            size="sm"
-            icon="💬"
-          />
-          <LoadingButton
-            title="Supprimer"
-            onPress={() => handleDeleteGuest(item.id, item.fullName)}
-            variant="outline"
-            size="sm"
-            icon="🗑️"
-            loading={isLoading('deleteGuest')}
-          />
-        </View>
-      </Card>
-    );
-  };
+  const keyExtractor = useCallback((item: any) => item.id.toString(), []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -291,19 +262,19 @@ export default function GuestListScreen({ navigation }: any) {
         <Text style={styles.statsTitle}>📊 Statistiques</Text>
         <View style={styles.statsGrid}>
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{total}</Text>
+            <Text style={styles.statNumber}>{statsData.total}</Text>
             <Text style={styles.statLabel}>Invités</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={[styles.statNumber, { color: theme.colors.success }]}>{presentCount}</Text>
+            <Text style={[styles.statNumber, { color: theme.colors.success }]}>{statsData.presentCount}</Text>
             <Text style={styles.statLabel}>Présents</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={[styles.statNumber, { color: theme.colors.error }]}>{absentCount}</Text>
+            <Text style={[styles.statNumber, { color: theme.colors.error }]}>{statsData.absentCount}</Text>
             <Text style={styles.statLabel}>Absents</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{totalCompanions}</Text>
+            <Text style={styles.statNumber}>{statsData.totalCompanions}</Text>
             <Text style={styles.statLabel}>Accompagnants</Text>
           </View>
         </View>
@@ -329,7 +300,7 @@ export default function GuestListScreen({ navigation }: any) {
 
       <FlatList
         data={filteredGuests}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={keyExtractor}
         renderItem={renderGuestItem}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         contentContainerStyle={styles.listContainer}
@@ -470,55 +441,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingBottom: 100,
   },
-  guestCard: {
-    marginBottom: theme.spacing.md,
-  },
-  guestHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: theme.spacing.md,
-  },
-  guestName: {
-    ...theme.typography.h3,
-    color: theme.colors.text,
-    flex: 1,
-  },
-  statusBadge: {
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs,
-    borderRadius: theme.borderRadius.sm,
-  },
-  presentBadge: {
-    backgroundColor: theme.colors.success + '20',
-  },
-  absentBadge: {
-    backgroundColor: theme.colors.error + '20',
-  },
-  statusText: {
-    ...theme.typography.small,
-    fontWeight: '600',
-  },
-  presentText: {
-    color: theme.colors.success,
-  },
-  absentText: {
-    color: theme.colors.error,
-  },
-  guestInfo: {
-    marginBottom: theme.spacing.md,
-    gap: theme.spacing.xs,
-  },
-  infoItem: {
-    ...theme.typography.body,
-    color: theme.colors.textSecondary,
-  },
-  guestActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: theme.spacing.sm,
-    flexWrap: 'wrap',
-  },
+
   fab: {
     position: 'absolute',
     right: theme.spacing.lg,

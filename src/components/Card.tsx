@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo, useMemo } from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
 import { theme } from '../styles/theme';
 
@@ -8,13 +8,21 @@ interface CardProps {
   padding?: keyof typeof theme.spacing;
 }
 
-export default function Card({ children, style, padding = 'lg' }: CardProps) {
+const Card = memo<CardProps>(function Card({ children, style, padding = 'lg' }: CardProps) {
+  const cardStyle = useMemo(() => [
+    styles.card, 
+    { padding: theme.spacing[padding] }, 
+    style
+  ], [padding, style]);
+
   return (
-    <View style={[styles.card, { padding: theme.spacing[padding] }, style]}>
+    <View style={cardStyle}>
       {children}
     </View>
   );
-}
+});
+
+export default Card;
 
 const styles = StyleSheet.create({
   card: {

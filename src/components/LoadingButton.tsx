@@ -2,7 +2,7 @@
  * Bouton avec état de chargement intégré
  */
 
-import React from 'react';
+import React, { memo, useMemo } from 'react';
 import { TouchableOpacity, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { theme } from '../styles/theme';
 
@@ -16,7 +16,7 @@ interface LoadingButtonProps {
   icon?: string;
 }
 
-export const LoadingButton: React.FC<LoadingButtonProps> = ({
+export const LoadingButton = memo<LoadingButtonProps>(function LoadingButton({
   title,
   onPress,
   loading = false,
@@ -24,22 +24,27 @@ export const LoadingButton: React.FC<LoadingButtonProps> = ({
   variant = 'primary',
   size = 'md',
   icon
-}) => {
-  const isDisabled = disabled || loading;
+}) {
+  const isDisabled = useMemo(() => disabled || loading, [disabled, loading]);
 
-  const buttonStyle = [
+  const buttonStyle = useMemo(() => [
     styles.button,
     styles[variant],
     styles[size],
     isDisabled && styles.disabled
-  ];
+  ], [variant, size, isDisabled]);
 
-  const textStyle = [
+  const textStyle = useMemo(() => [
     styles.text,
     styles[`${variant}Text`],
     styles[`${size}Text`],
     isDisabled && styles.disabledText
-  ];
+  ], [variant, size, isDisabled]);
+
+  const spinnerColor = useMemo(() => 
+    variant === 'outline' ? theme.colors.primary : theme.colors.surface,
+    [variant]
+  );
 
   return (
     <TouchableOpacity
@@ -51,7 +56,7 @@ export const LoadingButton: React.FC<LoadingButtonProps> = ({
       {loading ? (
         <ActivityIndicator 
           size="small" 
-          color={variant === 'outline' ? theme.colors.primary : theme.colors.surface} 
+          color={spinnerColor} 
         />
       ) : (
         <>
@@ -61,7 +66,7 @@ export const LoadingButton: React.FC<LoadingButtonProps> = ({
       )}
     </TouchableOpacity>
   );
-};
+});
 
 const styles = StyleSheet.create({
   button: {

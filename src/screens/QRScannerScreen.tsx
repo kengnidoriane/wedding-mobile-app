@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Alert, Modal, SafeAreaView, TextInput, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { parseQRData, GuestQRData } from '../utils/qrUtils';
@@ -132,7 +132,7 @@ export default function QRScannerScreen() {
     }
   };
 
-  const searchGuests = (query: string) => {
+  const searchGuests = useCallback((query: string) => {
     setSearchQuery(query);
     if (query.trim().length < 2) {
       setSearchResults([]);
@@ -144,9 +144,9 @@ export default function QRScannerScreen() {
       guest.tableName.toLowerCase().includes(query.toLowerCase())
     );
     setSearchResults(filtered);
-  };
+  }, [guests]);
 
-  const selectManualGuest = async (guest: Guest) => {
+  const selectManualGuest = useCallback(async (guest: Guest) => {
     setCurrentGuest(guest);
     setShowManualSearch(false);
     setSearchQuery('');
@@ -171,12 +171,12 @@ export default function QRScannerScreen() {
     }
     
     setShowModal(true);
-  };
+  }, [markPresent]);
 
-  const closeModal = () => {
+  const closeModal = useCallback(() => {
     setShowModal(false);
     setCurrentGuest(null);
-  };
+  }, []);
 
   if (!permission) {
     return (

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo, useMemo } from 'react';
 import { TouchableOpacity, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
 import { theme } from '../styles/theme';
 
@@ -11,7 +11,7 @@ interface ButtonProps {
   icon?: string;
 }
 
-export default function Button({ 
+const Button = memo<ButtonProps>(function Button({ 
   title, 
   onPress, 
   variant = 'primary', 
@@ -19,19 +19,24 @@ export default function Button({
   disabled = false,
   icon 
 }: ButtonProps) {
-  const buttonStyle = [
+  const buttonStyle = useMemo(() => [
     styles.base,
     styles[variant],
     styles[size],
     disabled && styles.disabled,
-  ];
+  ], [variant, size, disabled]);
 
-  const textStyle = [
+  const textStyle = useMemo(() => [
     styles.text,
     styles[`${variant}Text`],
     styles[`${size}Text`],
     disabled && styles.disabledText,
-  ];
+  ], [variant, size, disabled]);
+
+  const displayText = useMemo(() => 
+    `${icon ? `${icon} ` : ''}${title}`,
+    [icon, title]
+  );
 
   return (
     <TouchableOpacity 
@@ -41,11 +46,13 @@ export default function Button({
       activeOpacity={0.8}
     >
       <Text style={textStyle}>
-        {icon && `${icon} `}{title}
+        {displayText}
       </Text>
     </TouchableOpacity>
   );
-}
+});
+
+export default Button;
 
 const styles = StyleSheet.create({
   base: {

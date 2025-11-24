@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, SafeAreaView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -8,18 +8,23 @@ import Card from '../components/Card';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { useFirebaseGuests } from '../hooks/useFirebaseGuests';
 
+const menuItems = [
+  { title: 'Scanner QR code', icon: '📱', screen: 'QRScanner', color: theme.colors.primary },
+  { title: 'Liste des invités', icon: '👥', screen: 'Invités', color: theme.colors.secondary },
+  { title: 'Partager QR WhatsApp', icon: '💬', screen: 'QRWhatsAppShare', color: theme.colors.success },
+  { title: 'Envoi en masse', icon: '📤', screen: 'QRBulkGenerator', color: theme.colors.success },
+  { title: 'Tableau de bord', icon: '📊', screen: 'Dashboard', color: theme.colors.primary },
+  { title: 'Paramètres', icon: '⚙️', screen: 'Paramètres', color: theme.colors.textSecondary },
+];
+
 export default function HomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const { loading, stats } = useFirebaseGuests();
 
-  const menuItems = [
-    { title: 'Scanner QR code', icon: '📱', screen: 'QRScanner', color: theme.colors.primary },
-    { title: 'Liste des invités', icon: '👥', screen: 'Invités', color: theme.colors.secondary },
-    { title: 'Partager QR WhatsApp', icon: '💬', screen: 'QRWhatsAppShare', color: theme.colors.success },
-    { title: 'Envoi en masse', icon: '📤', screen: 'QRBulkGenerator', color: theme.colors.success },
-    { title: 'Tableau de bord', icon: '📊', screen: 'Dashboard', color: theme.colors.primary },
-    { title: 'Paramètres', icon: '⚙️', screen: 'Paramètres', color: theme.colors.textSecondary },
-  ];
+  const statsText = useMemo(() => 
+    stats ? `${stats.present}/${stats.total} invités présents` : '',
+    [stats]
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -34,7 +39,7 @@ export default function HomeScreen() {
           ) : stats && (
             <View style={styles.quickStats}>
               <Text style={styles.statsText}>
-                {stats.present}/{stats.total} invités présents
+                {statsText}
               </Text>
             </View>
           )}
