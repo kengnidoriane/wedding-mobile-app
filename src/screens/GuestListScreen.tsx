@@ -6,7 +6,9 @@ import Papa from 'papaparse';
 import { theme } from '../styles/theme';
 import Button from '../components/Button';
 import Card from '../components/Card';
+import { ErrorDisplay } from '../components/ErrorDisplay';
 import { useFirebaseGuests } from '../hooks/useFirebaseGuests';
+import { useErrorHandler } from '../hooks/useErrorHandler';
 import { CreateGuestData, SyncStatus } from '../types/guest';
 
 export default function GuestListScreen({ navigation }: any) {
@@ -22,8 +24,13 @@ export default function GuestListScreen({ navigation }: any) {
     markPresent,
     markAbsent,
     importGuests,
-    clearError
+    clearError,
+    showError,
+    showAlert
   } = useFirebaseGuests();
+  
+  // Gestionnaire d'erreurs local pour les opérations UI
+  const { error: localError, showError: showLocalError, clearError: clearLocalError } = useErrorHandler();
 
   // État local pour l'interface
   const [search, setSearch] = useState('');
@@ -56,7 +63,7 @@ export default function GuestListScreen({ navigation }: any) {
     const companionsNum = parseInt(newCompanions, 10);
 
     if (!fullName || !tableName || isNaN(companionsNum) || companionsNum < 0) {
-      Alert.alert('Champs invalides', "Veuillez remplir correctement tous les champs.");
+      showLocalError('Veuillez remplir correctement tous les champs', 'validation formulaire');
       return;
     }
 
@@ -157,13 +164,13 @@ export default function GuestListScreen({ navigation }: any) {
                 console.error('Error in handleImportCSV:', error);
               }
             } else {
-              Alert.alert('Aucun invité', 'Aucun invité valide trouvé dans le fichier');
+              showLocalError('Aucun invité valide trouvé dans le fichier', 'import CSV');
             }
           },
         });
       }
     } catch (error) {
-      Alert.alert('Erreur', 'Impossible d\'importer le fichier');
+      showLocalError(error, 'import CSV');
     }
   };
 
@@ -230,6 +237,15 @@ export default function GuestListScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Affichage des erreurs locales */}
+      {localError && (
+        <ErrorDisplay
+          error={localError}
+          onDismiss={clearLocalError}
+          variant="banner"
+        />
+      )}
+      
       <View style={styles.header}>
         <Text style={styles.title}>Liste des invités</Text>
         <Text style={styles.subtitle}>Gérez vos invitations</Text>

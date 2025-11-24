@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Alert } from 'react-native';
 
 import { firebaseService } from '../services/firebaseService';
+import { useErrorHandler } from './useErrorHandler';
 import { 
   Guest, 
   CreateGuestData, 
@@ -25,6 +26,11 @@ interface UseFirebaseGuestsReturn {
   syncState: SyncState;
   loading: boolean;
   error: string | null;
+  
+  // Gestion d'erreurs standardisée
+  showError: (error: unknown, context?: string) => void;
+  showAlert: (error: unknown, context?: string) => void;
+  clearError: () => void;
   
   // Actions
   addGuest: (guestData: CreateGuestData) => Promise<void>;
@@ -59,6 +65,9 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
+  // Gestion d'erreurs standardisée
+  const { showError, showAlert, clearError: clearErrorHandler } = useErrorHandler();
+  
   // Références pour éviter les fuites mémoire
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const isMountedRef = useRef(true);
@@ -79,18 +88,21 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
   /**
    * Gère les erreurs de manière centralisée
    */
-  const handleError = useCallback((error: unknown, context: string) => {
+  const handleError = useCallback((error: unknown, context: string, showAlertDialog = true) => {
     const errorMessage = error instanceof Error ? error.message : 'Une erreur inconnue est survenue';
-    console.error(`❌ Error in ${context}:`, error);
     
     if (!isMountedRef.current) return;
     
     setError(errorMessage);
     updateSyncState(SyncStatus.ERROR, errorMessage);
     
-    // Afficher une alerte pour les erreurs critiques
-    Alert.alert('Erreur', errorMessage);
-  }, [updateSyncState]);
+    // Utiliser le gestionnaire d'erreurs standardisé
+    if (showAlertDialog) {
+      showAlert(error, context);
+    } else {
+      showError(error, context);
+    }
+  }, [updateSyncState, showError, showAlert]);
 
   /**
    * Initialise Firebase et démarre l'écoute des invités
@@ -268,7 +280,8 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
   const clearError = useCallback(() => {
     setError(null);
     setSyncState(prev => ({ ...prev, error: null }));
-  }, []);
+    clearErrorHandler();
+  }, [clearErrorHandler]);
 
   // Calculer les statistiques automatiquement quand les invités changent
   useEffect(() => {
@@ -306,6 +319,10 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
     // Utilitaires
     findGuestById,
     findGuestsByTable,
-    clearError
+    clearError,
+    
+    // Gestion d'erreurs standardisée
+    showError,
+    showAlert
   };
 };

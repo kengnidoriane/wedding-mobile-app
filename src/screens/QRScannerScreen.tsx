@@ -5,7 +5,9 @@ import { parseQRData, GuestQRData } from '../utils/qrUtils';
 import { theme } from '../styles/theme';
 import Button from '../components/Button';
 import Card from '../components/Card';
+import { ErrorDisplay } from '../components/ErrorDisplay';
 import { useFirebaseGuests } from '../hooks/useFirebaseGuests';
+import { useErrorHandler } from '../hooks/useErrorHandler';
 import { Guest } from '../types/guest';
 
 export default function QRScannerScreen() {
@@ -16,6 +18,9 @@ export default function QRScannerScreen() {
     markPresent,
     findGuestById
   } = useFirebaseGuests();
+  
+  // Gestionnaire d'erreurs standardisé
+  const { error, showError, showAlert, clearError } = useErrorHandler();
 
   // États locaux
   const [permission, requestPermission] = useCameraPermissions();
@@ -116,21 +121,7 @@ export default function QRScannerScreen() {
         );
       }
     } catch (error) {
-      console.error('Error processing QR code:', error);
-      Alert.alert(
-        '❌ Erreur',
-        'Impossible de traiter ce QR code. Veuillez réessayer.',
-        [
-          {
-            text: 'Recherche manuelle',
-            onPress: () => setShowManualSearch(true)
-          },
-          {
-            text: 'OK',
-            style: 'cancel'
-          }
-        ]
-      );
+      showAlert(error, 'traitement QR code');
     } finally {
       setProcessing(false);
       // Permettre un nouveau scan après 2 secondes
@@ -167,7 +158,7 @@ export default function QRScannerScreen() {
           `${guest.fullName} a été marqué(e) comme présent(e).`
         );
       } catch (error) {
-        Alert.alert('Erreur', 'Impossible de marquer la présence');
+        showAlert(error, 'marquage présence');
       }
     } else {
       Alert.alert(
@@ -214,6 +205,14 @@ export default function QRScannerScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Affichage des erreurs */}
+      {error && (
+        <ErrorDisplay
+          error={error}
+          onDismiss={clearError}
+          variant="banner"
+        />
+      )}
       <View style={styles.header}>
         <Text style={styles.title}>Scanner QR Code</Text>
         <Text style={styles.subtitle}>Placez le QR code dans le cadre</Text>
