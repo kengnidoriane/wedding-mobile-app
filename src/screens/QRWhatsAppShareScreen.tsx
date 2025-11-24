@@ -199,8 +199,10 @@ export default function QRWhatsAppShareScreen() {
   const handleShareWhatsApp = useCallback(async () => {
     const currentGuest = guests[currentIndex];
     
-    try {
-      setSharing(true);
+    // Afficher l'avertissement avant le partage
+    qrSharingService.showSharingWarning(currentGuest.fullName, async () => {
+      try {
+        setSharing(true);
       
       // Vérifier que la référence ViewShot est disponible
       if (!captureRef || !captureRef.current) {
@@ -230,9 +232,9 @@ export default function QRWhatsAppShareScreen() {
       // Track temporary image URI for cleanup
       tempImageUris.current.add(imageUri);
       
-      // Prepare guest data for sharing (convertir l'ID en number pour compatibilité)
+      // Prepare guest data for sharing
       const guestData = {
-        id: parseInt(currentGuest.id),
+        id: currentGuest.id,
         fullName: currentGuest.fullName,
         tableName: currentGuest.tableName,
         companions: currentGuest.companions,
@@ -321,17 +323,20 @@ export default function QRWhatsAppShareScreen() {
           [{ text: 'OK', style: 'default' }]
         );
       }
-    } finally {
-      setSharing(false);
-    }
+      } finally {
+        setSharing(false);
+      }
+    });
   }, [guests, currentIndex]);
 
   // Save to Gallery handler - memoized to prevent unnecessary re-renders
   const handleSaveToGallery = useCallback(async () => {
     const currentGuest = guests[currentIndex];
     
-    try {
-      setSaving(true);
+    // Afficher l'avertissement avant la sauvegarde
+    qrSharingService.showSharingWarning(currentGuest.fullName, async () => {
+      try {
+        setSaving(true);
       
       // Vérifier que la référence ViewShot est disponible
       if (!captureRef || !captureRef.current) {
@@ -361,9 +366,9 @@ export default function QRWhatsAppShareScreen() {
       // Track temporary image URI for cleanup
       tempImageUris.current.add(imageUri);
       
-      // Prepare guest data for saving (convertir l'ID en number pour compatibilité)
+      // Prepare guest data for saving
       const guestData = {
-        id: parseInt(currentGuest.id),
+        id: currentGuest.id,
         fullName: currentGuest.fullName,
         tableName: currentGuest.tableName,
         companions: currentGuest.companions,
@@ -455,17 +460,20 @@ export default function QRWhatsAppShareScreen() {
           [{ text: 'OK', style: 'default' }]
         );
       }
-    } finally {
-      setSaving(false);
-    }
+      } finally {
+        setSaving(false);
+      }
+    });
   }, [guests, currentIndex]);
 
   // Share via System handler - memoized to prevent unnecessary re-renders
   const handleShareOther = useCallback(async () => {
     const currentGuest = guests[currentIndex];
     
-    try {
-      setSharingOther(true);
+    // Afficher l'avertissement avant le partage
+    qrSharingService.showSharingWarning(currentGuest.fullName, async () => {
+      try {
+        setSharingOther(true);
       
       // Vérifier que la référence ViewShot est disponible
       if (!captureRef || !captureRef.current) {
@@ -492,9 +500,9 @@ export default function QRWhatsAppShareScreen() {
       // Capture the QR code as an image
       const imageUri = await qrSharingService.captureQRCode(captureRef);
       
-      // Prepare guest data for sharing (convertir l'ID en number pour compatibilité)
+      // Prepare guest data for sharing
       const guestData = {
-        id: parseInt(currentGuest.id),
+        id: currentGuest.id,
         fullName: currentGuest.fullName,
         tableName: currentGuest.tableName,
         companions: currentGuest.companions,

@@ -2,7 +2,7 @@ import { RefObject } from 'react';
 import * as Sharing from 'expo-sharing';
 import * as MediaLibrary from 'expo-media-library';
 import { Paths, File } from 'expo-file-system';
-import { Alert } from 'react-native';
+import { Alert, Linking } from 'react-native';
 import { GuestQRData } from '../utils/qrUtils';
 
 // Types d'erreurs pour le service de partage QR
@@ -80,7 +80,7 @@ export const captureQRCode = async (
  * @returns Message formaté pour WhatsApp
  */
 export const generateShareMessage = (guest: GuestQRData): string => {
-  return `🎉 *Invitation de mariage*
+  return `🎉 *Invitation de mariage - ${guest.fullName}*
 
 Bonjour ${guest.fullName} !
 
@@ -89,18 +89,24 @@ Voici votre QR code d'invitation personnalisé 📱
 *Détails de votre invitation :*
 📍 Table : ${guest.tableName}
 👥 Accompagnants : ${guest.companions}
-🆔 ID : #${guest.id}
+🆔 ID : ${guest.id}
+
+*⚠️ IMPORTANT - À LIRE ABSOLUMENT :*
+🚪 *Ce QR code est OBLIGATOIRE pour entrer à la cérémonie*
+📱 *Gardez-le sur votre téléphone ou imprimez-le*
+🎫 *Sans ce code, l'accès pourra être refusé*
 
 *Instructions :*
 1️⃣ Sauvegardez cette image sur votre téléphone
 2️⃣ Présentez-la à l'entrée le jour J
 3️⃣ Notre équipe la scannera pour confirmer votre présence
+4️⃣ Une seule utilisation par invitation
 
 Merci et à très bientôt ! 💒✨`;
 };
 
 /**
- * Partage l'image QR code via WhatsApp
+ * Affiche le message d'accompagnement et permet le partage de l'image
  * @param imageUri - URI de l'image capturée
  * @param guest - Données de l'invité
  */
@@ -120,22 +126,74 @@ export const shareViaWhatsApp = async (
       throw new Error(QRSharingError.SHARE_FAILED);
     }
     
-    // Vérifier si le partage est disponible
-    const isAvailable = await Sharing.isAvailableAsync();
+    // Générer le message d'accompagnement
+    const shareMessage = generateShareMessage(guest);
     
-    if (!isAvailable) {
-      console.error('Sharing is not available on this device');
-      throw new Error(QRSharingError.WHATSAPP_NOT_AVAILABLE);
-    }
+    // Afficher le message avec options de partage
+    Alert.alert(
+      '📱 Message pour WhatsApp',
+      `Voici le message à envoyer avec le QR code :\n\n${shareMessage}`,
+      [
+        {
+          text: 'Copier le message',
+          onPress: async () => {
+            // Copier le message dans le presse-papiers
+            try {
+              const { setStringAsync } = await import('expo-clipboard');
+              await setStringAsync(shareMessage);
+              
+              // Puis partager l'image
+              const isAvailable = await Sharing.isAvailableAsync();
+              if (isAvailable) {
+                await Sharing.shareAsync(imageUri, {
+                  mimeType: 'image/png',
+                  dialogTitle: `QR Code - ${guest.fullName}`,
+                  UTI: 'public.png'
+                });
+                
+                Alert.alert(
+                  '✅ Prêt !',
+                  'Le message a été copié et le QR code va être partagé. Collez le message dans WhatsApp puis envoyez l\'image.',
+                  [{ text: 'Compris', style: 'default' }]
+                );
+              }
+            } catch (clipboardError) {
+              console.warn('Could not copy to clipboard:', clipboardError);
+              // Fallback: juste partager l'image
+              const isAvailable = await Sharing.isAvailableAsync();
+              if (isAvailable) {
+                await Sharing.shareAsync(imageUri, {
+                  mimeType: 'image/png',
+                  dialogTitle: `QR Code - ${guest.fullName}`,
+                  UTI: 'public.png'
+                });
+              }
+            }
+          }
+        },
+        {
+          text: 'Juste l\'image',
+          onPress: async () => {
+            // Partager seulement l'image
+            const isAvailable = await Sharing.isAvailableAsync();
+            if (isAvailable) {
+              await Sharing.shareAsync(imageUri, {
+                mimeType: 'image/png',
+                dialogTitle: `QR Code - ${guest.fullName}`,
+                UTI: 'public.png'
+              });
+            }
+          }
+        },
+        {
+          text: 'Annuler',
+          style: 'cancel'
+        }
+      ],
+      { cancelable: true }
+    );
     
-    // Partager l'image avec le titre personnalisé
-    await Sharing.shareAsync(imageUri, {
-      mimeType: 'image/png',
-      dialogTitle: `Invitation - ${guest.fullName}`,
-      UTI: 'public.png'
-    });
-    
-    console.log('Successfully shared via WhatsApp for guest:', guest.fullName);
+    console.log('Successfully prepared WhatsApp share for guest:', guest.fullName);
     
   } catch (error) {
     console.error('Error sharing via WhatsApp:', error);
@@ -331,6 +389,29 @@ export const showSuccessAlert = (message: string): void => {
     'Succès',
     message,
     [{ text: 'OK', style: 'default' }]
+  );
+};
+
+/**
+ * Affiche un avertissement important avant le partage
+ * @param guestName - Nom de l'invité
+ * @param onConfirm - Callback à exécuter si l'utilisateur confirme
+ */
+export const showSharingWarning = (guestName: string, onConfirm: () => void): void => {
+  Alert.alert(
+    '⚠️ Important - Partage QR Code',
+    `Vous allez partager le QR code de ${guestName}.\n\n🚨 ATTENTION :\n• Ce QR code est OBLIGATOIRE pour entrer\n• Il ne peut être utilisé qu'UNE SEULE FOIS\n• Une fois scanné, il devient inutilisable\n• Assurez-vous de l'envoyer à la bonne personne\n\nVoulez-vous continuer ?`,
+    [
+      {
+        text: 'Annuler',
+        style: 'cancel'
+      },
+      {
+        text: 'Oui, partager',
+        style: 'default',
+        onPress: onConfirm
+      }
+    ]
   );
 };
 

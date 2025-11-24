@@ -1,31 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { View, Text, FlatList, StyleSheet, Alert, Share, SafeAreaView } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import * as Linking from 'expo-linking';
-import { getAllGuests } from '../db/database';
 import { generateQRData, generateWhatsAppMessage } from '../utils/qrUtils';
 import { theme } from '../styles/theme';
 import Button from '../components/Button';
 import Card from '../components/Card';
+import { useFirebaseGuests } from '../hooks/useFirebaseGuests';
 
 export default function QRGeneratorScreen() {
-  const [guests, setGuests] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadGuests();
-  }, []);
-
-  const loadGuests = async () => {
-    try {
-      const data = await getAllGuests();
-      setGuests(data);
-    } catch (error) {
-      Alert.alert('Erreur', 'Impossible de charger les invités');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Utiliser le hook Firebase au lieu de SQLite
+  const { guests, loading } = useFirebaseGuests();
 
   const shareViaWhatsApp = async (guest: any) => {
     try {

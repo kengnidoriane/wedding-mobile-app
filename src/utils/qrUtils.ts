@@ -1,5 +1,5 @@
 export interface GuestQRData {
-  id: number;
+  id: string;
   fullName: string;
   tableName: string;
   companions: number;
@@ -27,7 +27,7 @@ export const parseQRData = (qrString: string): GuestQRData | null => {
     
     // Vérifier que toutes les propriétés requises sont présentes
     if (
-      typeof data.id === 'number' &&
+      typeof data.id === 'string' &&
       typeof data.fullName === 'string' &&
       typeof data.tableName === 'string' &&
       typeof data.companions === 'number'
@@ -52,7 +52,7 @@ Voici votre QR code d'invitation personnalisé :
 • Nom : ${guest.fullName}
 • Table assignée : ${guest.tableName}
 • Nombre d'accompagnants : ${guest.companions}
-• ID invité : #${guest.id}
+• ID invité : ${guest.id}
 
 📱 Instructions :
 1. Gardez ce QR code sur votre téléphone
@@ -72,7 +72,7 @@ Voici votre QR code d'invitation personnalisé 📱
 *Détails de votre invitation :*
 📍 Table : ${guest.tableName}
 👥 Accompagnants : ${guest.companions}
-🆔 ID : #${guest.id}
+🆔 ID : ${guest.id}
 
 *Instructions :*
 1️⃣ Sauvegardez cette image sur votre téléphone
@@ -91,7 +91,7 @@ export const generateBulkWhatsAppMessage = (guests: GuestQRData[]): string => {
     message += `${index + 1}. 👤 ${guest.fullName}\n`;
     message += `   📍 Table : ${guest.tableName}\n`;
     message += `   👥 Accompagnants : ${guest.companions}\n`;
-    message += `   🆔 ID : #${guest.id}\n\n`;
+    message += `   🆔 ID : ${guest.id}\n\n`;
   });
 
   message += '📋 Instructions importantes :\n';

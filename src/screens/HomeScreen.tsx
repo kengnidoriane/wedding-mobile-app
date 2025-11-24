@@ -12,7 +12,6 @@ export default function HomeScreen() {
   const menuItems = [
     { title: 'Scanner QR code', icon: '📱', screen: 'QRScanner', color: theme.colors.primary },
     { title: 'Liste des invités', icon: '👥', screen: 'Invités', color: theme.colors.secondary },
-    { title: 'Générer QR codes', icon: '🎟️', screen: 'QRGenerator', color: theme.colors.accent },
     { title: 'Partager QR WhatsApp', icon: '💬', screen: 'QRWhatsAppShare', color: theme.colors.success },
     { title: 'Envoi en masse', icon: '📤', screen: 'QRBulkGenerator', color: theme.colors.success },
     { title: 'Tableau de bord', icon: '📊', screen: 'Dashboard', color: theme.colors.primary },

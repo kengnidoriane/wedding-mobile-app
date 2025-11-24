@@ -64,29 +64,33 @@ export default function QRScannerScreen() {
       if (guest) {
         setCurrentGuest(guest);
         
-        // Marquer automatiquement comme présent
-        if (!guest.isPresent) {
-          await markPresent(guest.id);
-          
-          // Afficher le succès
+        // Vérifier si l'invité est déjà présent (protection contre double scan)
+        if (guest.isPresent) {
+          // QR code déjà utilisé - Afficher une erreur claire
           Alert.alert(
-            '✅ Présence confirmée !',
-            `${guest.fullName} a été marqué(e) comme présent(e) automatiquement.`,
+            '🚫 QR Code déjà utilisé !',
+            `❌ Ce QR code a déjà été scanné !\n\n👤 Invité : ${guest.fullName}\n📍 Table : ${guest.tableName}\n👥 Accompagnants : ${guest.companions}\n\n⚠️ Cet invité est déjà marqué comme présent. Chaque QR code ne peut être utilisé qu'une seule fois.`,
             [
               {
-                text: 'Parfait !',
+                text: 'Compris',
                 style: 'default'
               }
             ]
           );
         } else {
-          // Déjà présent
+          // Marquer automatiquement comme présent
+          await markPresent(guest.id);
+          
+          // Calculer le nombre total de personnes (invité + accompagnants)
+          const totalPersons = 1 + guest.companions;
+          
+          // Afficher le succès avec détails complets
           Alert.alert(
-            'ℹ️ Déjà présent',
-            `${guest.fullName} était déjà marqué(e) comme présent(e).`,
+            '✅ Entrée autorisée !',
+            `🎉 Bienvenue ${guest.fullName} !\n\n📋 Détails confirmés :\n📍 Table : ${guest.tableName}\n👥 Total personnes : ${totalPersons} (vous + ${guest.companions} accompagnant${guest.companions > 1 ? 's' : ''})\n\n✅ Présence enregistrée avec succès !`,
             [
               {
-                text: 'OK',
+                text: 'Parfait !',
                 style: 'default'
               }
             ]
