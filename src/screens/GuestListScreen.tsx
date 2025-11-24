@@ -10,8 +10,10 @@ import { ErrorDisplay } from '../components/ErrorDisplay';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { LoadingButton } from '../components/LoadingButton';
 import GuestItem from '../components/GuestItem';
+import ValidatedTextInput from '../components/ValidatedTextInput';
 import { useFirebaseGuests } from '../hooks/useFirebaseGuests';
 import { useErrorHandler } from '../hooks/useErrorHandler';
+import { validationService } from '../services/validationService';
 import { CreateGuestData, SyncStatus } from '../types/guest';
 
 export default function GuestListScreen({ navigation }: any) {
@@ -62,23 +64,24 @@ export default function GuestListScreen({ navigation }: any) {
   };
 
   const submitAddGuest = async () => {
-    const fullName = newFullName.trim();
-    const tableName = newTableName.trim();
-    const companionsNum = parseInt(newCompanions, 10);
+    const guestData: CreateGuestData = {
+      fullName: newFullName.trim(),
+      tableName: newTableName.trim(),
+      companions: parseInt(newCompanions, 10) || 0
+    };
 
-    if (!fullName || !tableName || isNaN(companionsNum) || companionsNum < 0) {
-      showLocalError('Veuillez remplir correctement tous les champs', 'validation formulaire');
+    // Validation côté client avant l'envoi
+    const validation = validationService.validateCreateGuest(guestData);
+    if (!validation.isValid) {
+      showLocalError(validationService.formatValidationErrors(validation.errors), 'validation formulaire');
       return;
     }
 
-    const guestData: CreateGuestData = {
-      fullName,
-      tableName,
-      companions: companionsNum
-    };
+    // Sanitisation des données
+    const sanitizedData = validationService.sanitizeGuestData(guestData) as CreateGuestData;
 
     try {
-      await addGuest(guestData);
+      await addGuest(sanitizedData);
       closeAddModal();
     } catch (error) {
       // L'erreur est déjà gérée par le hook
@@ -148,11 +151,11 @@ export default function GuestListScreen({ navigation }: any) {
         Papa.parse(fileContent, {
           header: true,
           complete: async (results: any) => {
-            const guestsToImport: CreateGuestData[] = [];
+            const rawGuests: CreateGuestData[] = [];
             
             for (const row of results.data) {
               if (row.nom && row.table) {
-                guestsToImport.push({
+                rawGuests.push({
                   fullName: row.nom,
                   tableName: row.table,
                   companions: parseInt(row.accompagnants) || 0
@@ -160,11 +163,20 @@ export default function GuestListScreen({ navigation }: any) {
               }
             }
             
-            if (guestsToImport.length > 0) {
+            // Validation en lot
+            const { valid, invalid } = validationService.validateBatch(rawGuests);
+            
+            if (invalid.length > 0) {
+              const errorMessage = `${invalid.length} invité(s) invalide(s) ignoré(s):\n${invalid.slice(0, 3).map(item => 
+                `- ${item.data.fullName}: ${validationService.formatValidationErrors(item.errors)}`
+              ).join('\n')}${invalid.length > 3 ? '\n...' : ''}`;
+              showLocalError(errorMessage, 'validation import CSV');
+            }
+            
+            if (valid.length > 0) {
               try {
-                await importGuests(guestsToImport);
+                await importGuests(valid);
               } catch (error) {
-                // L'erreur est déjà gérée par le hook
                 console.error('Error in handleImportCSV:', error);
               }
             } else {
@@ -329,27 +341,30 @@ export default function GuestListScreen({ navigation }: any) {
           <Card style={styles.modalContent}>
             <Text style={styles.modalTitle}>Ajouter un invité</Text>
 
-            <TextInput
+            <ValidatedTextInput
+              label="Nom complet"
               value={newFullName}
               onChangeText={setNewFullName}
-              placeholder="Nom complet"
-              style={styles.modalInput}
-              placeholderTextColor={theme.colors.textLight}
+              placeholder="Entrez le nom complet"
+              required
+              error={newFullName.trim() && validationService.validateField('fullName', newFullName)?.message}
             />
-            <TextInput
+            <ValidatedTextInput
+              label="Nom de la table"
               value={newTableName}
               onChangeText={setNewTableName}
-              placeholder="Nom de la table"
-              style={styles.modalInput}
-              placeholderTextColor={theme.colors.textLight}
+              placeholder="Entrez le nom de la table"
+              required
+              error={newTableName.trim() && validationService.validateField('tableName', newTableName)?.message}
             />
-            <TextInput
+            <ValidatedTextInput
+              label="Nombre d'accompagnants"
               value={newCompanions}
               onChangeText={setNewCompanions}
-              placeholder="Nombre d'accompagnants"
+              placeholder="0"
               keyboardType="numeric"
-              style={styles.modalInput}
-              placeholderTextColor={theme.colors.textLight}
+              required
+              error={newCompanions.trim() && validationService.validateField('companions', parseInt(newCompanions) || 0)?.message}
             />
 
             <View style={styles.modalActions}>
@@ -489,15 +504,7 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.lg,
     textAlign: 'center',
   },
-  modalInput: {
-    backgroundColor: theme.colors.background,
-    borderRadius: theme.borderRadius.md,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
-    marginBottom: theme.spacing.md,
-    ...theme.typography.body,
-    color: theme.colors.text,
-  },
+
   modalActions: {
     flexDirection: 'row',
     gap: theme.spacing.md,
