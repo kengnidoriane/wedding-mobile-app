@@ -7,6 +7,8 @@ import { theme } from '../styles/theme';
 import Button from '../components/Button';
 import Card from '../components/Card';
 import { ErrorDisplay } from '../components/ErrorDisplay';
+import { LoadingSpinner } from '../components/LoadingSpinner';
+import { LoadingButton } from '../components/LoadingButton';
 import { useFirebaseGuests } from '../hooks/useFirebaseGuests';
 import { useErrorHandler } from '../hooks/useErrorHandler';
 import { CreateGuestData, SyncStatus } from '../types/guest';
@@ -26,7 +28,8 @@ export default function GuestListScreen({ navigation }: any) {
     importGuests,
     clearError,
     showError,
-    showAlert
+    showAlert,
+    isLoading
   } = useFirebaseGuests();
   
   // Gestionnaire d'erreurs local pour les opérations UI
@@ -209,12 +212,13 @@ export default function GuestListScreen({ navigation }: any) {
         </View>
 
         <View style={styles.guestActions}>
-          <Button
+          <LoadingButton
             title={isPresent ? "Marquer absent" : "Marquer présent"}
             onPress={() => toggleGuestPresence(item.id, item.fullName, isPresent)}
             variant={isPresent ? "outline" : "primary"}
             size="sm"
             icon={isPresent ? "❌" : "✅"}
+            loading={isLoading('markPresent') || isLoading('markAbsent')}
           />
           <Button
             title="Partager QR"
@@ -223,12 +227,13 @@ export default function GuestListScreen({ navigation }: any) {
             size="sm"
             icon="💬"
           />
-          <Button
+          <LoadingButton
             title="Supprimer"
             onPress={() => handleDeleteGuest(item.id, item.fullName)}
             variant="outline"
             size="sm"
             icon="🗑️"
+            loading={isLoading('deleteGuest')}
           />
         </View>
       </Card>
@@ -305,12 +310,13 @@ export default function GuestListScreen({ navigation }: any) {
       </Card>
 
       <View style={styles.actionButtons}>
-        <Button
+        <LoadingButton
           title="Importer CSV"
           onPress={handleImportCSV}
           variant="secondary"
           size="md"
           icon="📁"
+          loading={isLoading('importGuests')}
         />
         <Button
           title="QR Codes"
@@ -330,10 +336,10 @@ export default function GuestListScreen({ navigation }: any) {
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           loading ? (
-            <View style={styles.emptyContainer}>
-              <ActivityIndicator size="large" color={theme.colors.primary} />
-              <Text style={styles.emptyText}>Chargement des invités...</Text>
-            </View>
+            <LoadingSpinner 
+              text="Chargement des invités..." 
+              variant="inline"
+            />
           ) : (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>Aucun invité trouvé</Text>
@@ -382,11 +388,12 @@ export default function GuestListScreen({ navigation }: any) {
                 variant="outline"
                 size="md"
               />
-              <Button
+              <LoadingButton
                 title="Ajouter"
                 onPress={submitAddGuest}
                 variant="primary"
                 size="md"
+                loading={isLoading('addGuest')}
               />
             </View>
           </Card>

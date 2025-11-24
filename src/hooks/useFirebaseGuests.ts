@@ -8,6 +8,7 @@ import { Alert } from 'react-native';
 
 import { firebaseService } from '../services/firebaseService';
 import { useErrorHandler } from './useErrorHandler';
+import { useLoading } from './useLoading';
 import { 
   Guest, 
   CreateGuestData, 
@@ -31,6 +32,10 @@ interface UseFirebaseGuestsReturn {
   showError: (error: unknown, context?: string) => void;
   showAlert: (error: unknown, context?: string) => void;
   clearError: () => void;
+  
+  // États de chargement standardisés
+  isLoading: (key?: string) => boolean;
+  withLoading: <T>(key: string, asyncFn: () => Promise<T>) => Promise<T>;
   
   // Actions
   addGuest: (guestData: CreateGuestData) => Promise<void>;
@@ -67,6 +72,9 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
   
   // Gestion d'erreurs standardisée
   const { showError, showAlert, clearError: clearErrorHandler } = useErrorHandler();
+  
+  // Gestion des états de chargement
+  const { isLoading, withLoading } = useLoading();
   
   // Références pour éviter les fuites mémoire
   const unsubscribeRef = useRef<(() => void) | null>(null);
@@ -165,66 +173,81 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
    * Ajoute un nouvel invité
    */
   const addGuest = useCallback(async (guestData: CreateGuestData) => {
-    try {
-      updateSyncState(SyncStatus.SYNCING);
-      await firebaseService.addGuest(guestData);
-      updateSyncState(SyncStatus.SUCCESS);
-    } catch (error) {
-      handleError(error, 'adding guest');
-    }
-  }, [updateSyncState, handleError]);
+    await withLoading('addGuest', async () => {
+      try {
+        updateSyncState(SyncStatus.SYNCING);
+        await firebaseService.addGuest(guestData);
+        updateSyncState(SyncStatus.SUCCESS);
+      } catch (error) {
+        handleError(error, 'adding guest');
+        throw error;
+      }
+    });
+  }, [updateSyncState, handleError, withLoading]);
 
   /**
    * Met à jour un invité existant
    */
   const updateGuest = useCallback(async (guestId: string, updateData: UpdateGuestData) => {
-    try {
-      updateSyncState(SyncStatus.SYNCING);
-      await firebaseService.updateGuest(guestId, updateData);
-      updateSyncState(SyncStatus.SUCCESS);
-    } catch (error) {
-      handleError(error, 'updating guest');
-    }
-  }, [updateSyncState, handleError]);
+    await withLoading('updateGuest', async () => {
+      try {
+        updateSyncState(SyncStatus.SYNCING);
+        await firebaseService.updateGuest(guestId, updateData);
+        updateSyncState(SyncStatus.SUCCESS);
+      } catch (error) {
+        handleError(error, 'updating guest');
+        throw error;
+      }
+    });
+  }, [updateSyncState, handleError, withLoading]);
 
   /**
    * Supprime un invité
    */
   const deleteGuest = useCallback(async (guestId: string) => {
-    try {
-      updateSyncState(SyncStatus.SYNCING);
-      await firebaseService.deleteGuest(guestId);
-      updateSyncState(SyncStatus.SUCCESS);
-    } catch (error) {
-      handleError(error, 'deleting guest');
-    }
-  }, [updateSyncState, handleError]);
+    await withLoading('deleteGuest', async () => {
+      try {
+        updateSyncState(SyncStatus.SYNCING);
+        await firebaseService.deleteGuest(guestId);
+        updateSyncState(SyncStatus.SUCCESS);
+      } catch (error) {
+        handleError(error, 'deleting guest');
+        throw error;
+      }
+    });
+  }, [updateSyncState, handleError, withLoading]);
 
   /**
    * Marque un invité comme présent
    */
   const markPresent = useCallback(async (guestId: string) => {
-    try {
-      updateSyncState(SyncStatus.SYNCING);
-      await firebaseService.markGuestPresent(guestId);
-      updateSyncState(SyncStatus.SUCCESS);
-    } catch (error) {
-      handleError(error, 'marking guest present');
-    }
-  }, [updateSyncState, handleError]);
+    await withLoading('markPresent', async () => {
+      try {
+        updateSyncState(SyncStatus.SYNCING);
+        await firebaseService.markGuestPresent(guestId);
+        updateSyncState(SyncStatus.SUCCESS);
+      } catch (error) {
+        handleError(error, 'marking guest present');
+        throw error;
+      }
+    });
+  }, [updateSyncState, handleError, withLoading]);
 
   /**
    * Marque un invité comme absent
    */
   const markAbsent = useCallback(async (guestId: string) => {
-    try {
-      updateSyncState(SyncStatus.SYNCING);
-      await firebaseService.markGuestAbsent(guestId);
-      updateSyncState(SyncStatus.SUCCESS);
-    } catch (error) {
-      handleError(error, 'marking guest absent');
-    }
-  }, [updateSyncState, handleError]);
+    await withLoading('markAbsent', async () => {
+      try {
+        updateSyncState(SyncStatus.SYNCING);
+        await firebaseService.markGuestAbsent(guestId);
+        updateSyncState(SyncStatus.SUCCESS);
+      } catch (error) {
+        handleError(error, 'marking guest absent');
+        throw error;
+      }
+    });
+  }, [updateSyncState, handleError, withLoading]);
 
   /**
    * Rafraîchit les statistiques
@@ -244,19 +267,22 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
    * Importe des invités en lot
    */
   const importGuests = useCallback(async (guestsData: CreateGuestData[]) => {
-    try {
-      updateSyncState(SyncStatus.SYNCING);
-      await firebaseService.importGuests(guestsData);
-      updateSyncState(SyncStatus.SUCCESS);
-      
-      Alert.alert(
-        'Import réussi',
-        `${guestsData.length} invité(s) importé(s) avec succès`
-      );
-    } catch (error) {
-      handleError(error, 'importing guests');
-    }
-  }, [updateSyncState, handleError]);
+    await withLoading('importGuests', async () => {
+      try {
+        updateSyncState(SyncStatus.SYNCING);
+        await firebaseService.importGuests(guestsData);
+        updateSyncState(SyncStatus.SUCCESS);
+        
+        Alert.alert(
+          'Import réussi',
+          `${guestsData.length} invité(s) importé(s) avec succès`
+        );
+      } catch (error) {
+        handleError(error, 'importing guests');
+        throw error;
+      }
+    });
+  }, [updateSyncState, handleError, withLoading]);
 
   /**
    * Trouve un invité par son ID
@@ -323,6 +349,10 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
     
     // Gestion d'erreurs standardisée
     showError,
-    showAlert
+    showAlert,
+    
+    // États de chargement standardisés
+    isLoading,
+    withLoading
   };
 };

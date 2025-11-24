@@ -6,6 +6,8 @@ import { theme } from '../styles/theme';
 import Button from '../components/Button';
 import Card from '../components/Card';
 import { ErrorDisplay } from '../components/ErrorDisplay';
+import { LoadingSpinner } from '../components/LoadingSpinner';
+import { LoadingButton } from '../components/LoadingButton';
 import { useFirebaseGuests } from '../hooks/useFirebaseGuests';
 import { useErrorHandler } from '../hooks/useErrorHandler';
 import { Guest } from '../types/guest';
@@ -16,7 +18,8 @@ export default function QRScannerScreen() {
     guests,
     loading,
     markPresent,
-    findGuestById
+    findGuestById,
+    isLoading
   } = useFirebaseGuests();
   
   // Gestionnaire d'erreurs standardisé
@@ -178,9 +181,10 @@ export default function QRScannerScreen() {
   if (!permission) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Chargement de la caméra...</Text>
-        </View>
+        <LoadingSpinner 
+          text="Chargement de la caméra..." 
+          variant="fullscreen"
+        />
       </SafeAreaView>
     );
   }
@@ -237,16 +241,16 @@ export default function QRScannerScreen() {
         </Text>
         
         {processing && (
-          <ActivityIndicator size="small" color={theme.colors.primary} />
+          <LoadingSpinner size="small" variant="inline" />
         )}
         
-        <Button
+        <LoadingButton
           title="Recherche manuelle"
           onPress={() => setShowManualSearch(true)}
           variant="outline"
           size="md"
           icon="🔍"
-          disabled={processing}
+          loading={processing}
         />
       </View>
 

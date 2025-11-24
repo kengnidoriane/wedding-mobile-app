@@ -5,9 +5,12 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../styles/theme';
 import Button from '../components/Button';
 import Card from '../components/Card';
+import { LoadingSpinner } from '../components/LoadingSpinner';
+import { useFirebaseGuests } from '../hooks/useFirebaseGuests';
 
 export default function HomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
+  const { loading, stats } = useFirebaseGuests();
 
   const menuItems = [
     { title: 'Scanner QR code', icon: '📱', screen: 'QRScanner', color: theme.colors.primary },
@@ -24,6 +27,17 @@ export default function HomeScreen() {
         <View style={styles.header}>
           <Text style={styles.title}>💍 Mariage de Papa & Maman</Text>
           <Text style={styles.subtitle}>Gestion des invités simplifiée</Text>
+          
+          {/* Statistiques rapides */}
+          {loading ? (
+            <LoadingSpinner size="small" variant="inline" />
+          ) : stats && (
+            <View style={styles.quickStats}>
+              <Text style={styles.statsText}>
+                {stats.present}/{stats.total} invités présents
+              </Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.content}>
@@ -83,5 +97,18 @@ const styles = StyleSheet.create({
   footerText: {
     ...theme.typography.caption,
     color: theme.colors.textLight,
+  },
+  quickStats: {
+    marginTop: theme.spacing.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    backgroundColor: theme.colors.primary + '15',
+    borderRadius: theme.borderRadius.md,
+  },
+  statsText: {
+    ...theme.typography.caption,
+    color: theme.colors.primary,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });
