@@ -1,36 +1,42 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, TextInput, TouchableOpacity, RefreshControl, Modal, Alert, SafeAreaView } from 'react-native';
-import { getAllGuests, addGuest, deleteGuest, markGuestPresent } from '../db/database';
-import db from '../db/database';
+import React, { useMemo, useState } from 'react';
+import { View, Text, FlatList, StyleSheet, TextInput, TouchableOpacity, RefreshControl, Modal, Alert, SafeAreaView, ActivityIndicator } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import Papa from 'papaparse';
 import { theme } from '../styles/theme';
 import Button from '../components/Button';
 import Card from '../components/Card';
+import { useFirebaseGuests } from '../hooks/useFirebaseGuests';
+import { CreateGuestData, SyncStatus } from '../types/guest';
 
 export default function GuestListScreen({ navigation }: any) {
-  const [guests, setGuests] = useState<any[]>([]);
+  // Hook Firebase pour la gestion des invités
+  const {
+    guests,
+    stats,
+    syncState,
+    loading,
+    error,
+    addGuest,
+    deleteGuest: deleteGuestFirebase,
+    markPresent,
+    markAbsent,
+    importGuests,
+    clearError
+  } = useFirebaseGuests();
+
+  // État local pour l'interface
   const [search, setSearch] = useState('');
-  const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [newFullName, setNewFullName] = useState('');
   const [newTableName, setNewTableName] = useState('');
   const [newCompanions, setNewCompanions] = useState('');
-
-  useEffect(() => {
-    loadGuests();
-  }, []);
-
-  const loadGuests = async () => {
-    const data = await getAllGuests();
-    setGuests(data);
-  };
+  const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadGuests();
-    setRefreshing(false);
+    // Firebase se synchronise automatiquement, on simule juste un refresh
+    setTimeout(() => setRefreshing(false), 1000);
   };
 
   const handleAddGuest = async () => {
@@ -54,12 +60,22 @@ export default function GuestListScreen({ navigation }: any) {
       return;
     }
 
-    await addGuest(fullName, tableName, companionsNum);
-    closeAddModal();
-    loadGuests();
+    const guestData: CreateGuestData = {
+      fullName,
+      tableName,
+      companions: companionsNum
+    };
+
+    try {
+      await addGuest(guestData);
+      closeAddModal();
+    } catch (error) {
+      // L'erreur est déjà gérée par le hook
+      console.error('Error in submitAddGuest:', error);
+    }
   };
 
-  const handleDeleteGuest = async (id: number, name: string) => {
+  const handleDeleteGuest = async (id: string, name: string) => {
     Alert.alert(
       'Confirmer la suppression',
       `Voulez-vous vraiment supprimer ${name} ?`,
@@ -69,15 +85,19 @@ export default function GuestListScreen({ navigation }: any) {
           text: 'Supprimer', 
           style: 'destructive',
           onPress: async () => {
-            await deleteGuest(id);
-            loadGuests();
+            try {
+              await deleteGuestFirebase(id);
+            } catch (error) {
+              // L'erreur est déjà gérée par le hook
+              console.error('Error in handleDeleteGuest:', error);
+            }
           }
         }
       ]
     );
   };
 
-  const toggleGuestPresence = async (id: number, name: string, isCurrentlyPresent: boolean) => {
+  const toggleGuestPresence = async (id: string, name: string, isCurrentlyPresent: boolean) => {
     const action = isCurrentlyPresent ? 'marquer comme absent' : 'marquer comme présent';
     Alert.alert(
       'Changer le statut',
@@ -89,14 +109,13 @@ export default function GuestListScreen({ navigation }: any) {
           onPress: async () => {
             try {
               if (!isCurrentlyPresent) {
-                await markGuestPresent(id);
+                await markPresent(id);
               } else {
-                // Marquer comme absent (remettre à 0)
-                await db.runAsync('UPDATE guests SET isPresent = 0 WHERE id = ?', [id]);
+                await markAbsent(id);
               }
-              loadGuests();
             } catch (error) {
-              Alert.alert('Erreur', 'Impossible de changer le statut');
+              // L'erreur est déjà gérée par le hook
+              console.error('Error in toggleGuestPresence:', error);
             }
           }
         }
@@ -117,16 +136,29 @@ export default function GuestListScreen({ navigation }: any) {
         
         Papa.parse(fileContent, {
           header: true,
-          complete: async (results) => {
-            let imported = 0;
+          complete: async (results: any) => {
+            const guestsToImport: CreateGuestData[] = [];
+            
             for (const row of results.data) {
               if (row.nom && row.table) {
-                await addGuest(row.nom, row.table, parseInt(row.accompagnants) || 0);
-                imported++;
+                guestsToImport.push({
+                  fullName: row.nom,
+                  tableName: row.table,
+                  companions: parseInt(row.accompagnants) || 0
+                });
               }
             }
-            loadGuests();
-            Alert.alert('Succès', `${imported} invités importés`);
+            
+            if (guestsToImport.length > 0) {
+              try {
+                await importGuests(guestsToImport);
+              } catch (error) {
+                // L'erreur est déjà gérée par le hook
+                console.error('Error in handleImportCSV:', error);
+              }
+            } else {
+              Alert.alert('Aucun invité', 'Aucun invité valide trouvé dans le fichier');
+            }
           },
         });
       }
@@ -138,20 +170,21 @@ export default function GuestListScreen({ navigation }: any) {
   const filteredGuests = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return guests;
-    return guests.filter((g: any) =>
+    return guests.filter((g) =>
       (g.fullName || '').toLowerCase().includes(q) || 
       (g.tableName || '').toLowerCase().includes(q) ||
       g.companions.toString().includes(q)
     );
   }, [search, guests]);
 
-  const presentCount = useMemo(() => guests.filter((g: any) => g.isPresent === 1).length, [guests]);
-  const total = guests.length;
-  const absentCount = total - presentCount;
-  const totalCompanions = useMemo(() => guests.reduce((sum, guest) => sum + guest.companions, 0), [guests]);
+  // Utiliser les statistiques du hook Firebase
+  const presentCount = stats?.present || 0;
+  const total = stats?.total || 0;
+  const absentCount = stats?.absent || 0;
+  const totalCompanions = stats?.totalCompanions || 0;
 
   const renderGuestItem = ({ item }: { item: any }) => {
-    const isPresent = item.isPresent === 1;
+    const isPresent = item.isPresent;
     return (
       <Card style={styles.guestCard}>
         <View style={styles.guestHeader}>
@@ -200,6 +233,26 @@ export default function GuestListScreen({ navigation }: any) {
       <View style={styles.header}>
         <Text style={styles.title}>Liste des invités</Text>
         <Text style={styles.subtitle}>Gérez vos invitations</Text>
+        
+        {/* Indicateur de synchronisation */}
+        <View style={styles.syncIndicator}>
+          {syncState.status === SyncStatus.SYNCING && (
+            <View style={styles.syncingContainer}>
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+              <Text style={styles.syncText}>Synchronisation...</Text>
+            </View>
+          )}
+          {syncState.status === SyncStatus.SUCCESS && syncState.lastSync && (
+            <Text style={styles.syncText}>
+              ✅ Synchronisé {new Date(syncState.lastSync).toLocaleTimeString()}
+            </Text>
+          )}
+          {syncState.status === SyncStatus.ERROR && (
+            <TouchableOpacity onPress={clearError} style={styles.errorContainer}>
+              <Text style={styles.errorText}>❌ Erreur de sync - Appuyer pour réessayer</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <View style={styles.searchContainer}>
@@ -260,10 +313,17 @@ export default function GuestListScreen({ navigation }: any) {
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Aucun invité trouvé</Text>
-            <Text style={styles.emptySubtext}>Ajoutez des invités ou importez un fichier CSV</Text>
-          </View>
+          loading ? (
+            <View style={styles.emptyContainer}>
+              <ActivityIndicator size="large" color={theme.colors.primary} />
+              <Text style={styles.emptyText}>Chargement des invités...</Text>
+            </View>
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>Aucun invité trouvé</Text>
+              <Text style={styles.emptySubtext}>Ajoutez des invités ou importez un fichier CSV</Text>
+            </View>
+          )
         }
       />
 
@@ -496,5 +556,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: theme.spacing.md,
     marginTop: theme.spacing.md,
+  },
+  syncIndicator: {
+    marginTop: theme.spacing.sm,
+    alignItems: 'center',
+  },
+  syncingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+  },
+  syncText: {
+    ...theme.typography.caption,
+    color: theme.colors.textSecondary,
+  },
+  errorContainer: {
+    padding: theme.spacing.xs,
+    borderRadius: theme.borderRadius.sm,
+    backgroundColor: theme.colors.error + '20',
+  },
+  errorText: {
+    ...theme.typography.caption,
+    color: theme.colors.error,
   },
 });

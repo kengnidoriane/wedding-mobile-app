@@ -1,26 +1,19 @@
-import React, { useEffect, useState, useRef, useCallback, memo } from 'react';
+import React, { useState, useRef, useCallback, memo, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ActivityIndicator, Alert, ScrollView, Animated } from 'react-native';
 import { useRoute, RouteProp } from '@react-navigation/native';
 import ViewShot from 'react-native-view-shot';
 import QRCode from 'react-native-qrcode-svg';
-import { getAllGuests } from '../db/database';
 import { generateQRData } from '../utils/qrUtils';
 import { theme } from '../styles/theme';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import * as qrSharingService from '../services/qrSharingService';
+import { useFirebaseGuests } from '../hooks/useFirebaseGuests';
+import { Guest } from '../types/guest';
 
 type QRWhatsAppShareScreenParams = {
-  guestId?: number;
+  guestId?: string;
 };
-
-interface Guest {
-  id: number;
-  fullName: string;
-  tableName: string;
-  companions: number;
-  isPresent: number;
-}
 
 // Memoized Guest Info Component to prevent unnecessary re-renders
 const GuestInfoDisplay = memo(({ guest }: { guest: Guest }) => (
@@ -112,9 +105,14 @@ export default function QRWhatsAppShareScreen() {
   const route = useRoute<RouteProp<{ params: QRWhatsAppShareScreenParams }, 'params'>>();
   const guestIdParam = route.params?.guestId;
   
-  const [guests, setGuests] = useState<Guest[]>([]);
+  // Hook Firebase pour la gestion des invités
+  const {
+    guests,
+    loading,
+    findGuestById
+  } = useFirebaseGuests();
+  
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [sharing, setSharing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sharingOther, setSharingOther] = useState(false);
@@ -127,15 +125,18 @@ export default function QRWhatsAppShareScreen() {
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const overlayScale = useRef(new Animated.Value(0.8)).current;
 
+  // Trouver l'index de l'invité si guestId est fourni
   useEffect(() => {
-    loadGuests();
-    
-    // Cleanup function to remove temporary image URIs when component unmounts
-    return () => {
-      cleanupTempImages();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (guestIdParam && guests.length > 0) {
+      const guestIndex = guests.findIndex((guest: Guest) => guest.id === guestIdParam);
+      if (guestIndex !== -1) {
+        setCurrentIndex(guestIndex);
+        console.log(`Set current index to ${guestIndex} for guest ID ${guestIdParam}`);
+      } else {
+        console.warn(`Guest with ID ${guestIdParam} not found in the list`);
+      }
+    }
+  }, [guestIdParam, guests]);
 
   // Animate loading overlay when loading state changes
   useEffect(() => {
@@ -181,56 +182,6 @@ export default function QRWhatsAppShareScreen() {
     }
   }, []);
 
-  const loadGuests = useCallback(async () => {
-    try {
-      setLoading(true);
-      const data = await getAllGuests();
-      
-      if (!data) {
-        console.error('getAllGuests returned null or undefined');
-        setGuests([]);
-        return;
-      }
-      
-      setGuests(data as Guest[]);
-      console.log(`Loaded ${data.length} guests successfully`);
-      
-      // If guestId parameter is provided, find and set the current index
-      if (guestIdParam && data.length > 0) {
-        const guestIndex = (data as Guest[]).findIndex((guest: Guest) => guest.id === guestIdParam);
-        if (guestIndex !== -1) {
-          setCurrentIndex(guestIndex);
-          console.log(`Set current index to ${guestIndex} for guest ID ${guestIdParam}`);
-        } else {
-          console.warn(`Guest with ID ${guestIdParam} not found in the list`);
-        }
-      }
-    } catch (error) {
-      console.error('Error loading guests:', error);
-      
-      // Afficher un message d'erreur à l'utilisateur
-      Alert.alert(
-        'Erreur',
-        'Impossible de charger la liste des invités. Veuillez réessayer.',
-        [
-          { 
-            text: 'Réessayer', 
-            onPress: () => loadGuests(),
-            style: 'default'
-          },
-          { 
-            text: 'Annuler', 
-            style: 'cancel'
-          }
-        ]
-      );
-      
-      setGuests([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [guestIdParam]);
-
   // Navigation functions - memoized to prevent unnecessary re-renders
   const nextGuest = useCallback(() => {
     if (currentIndex < guests.length - 1) {
@@ -246,6 +197,8 @@ export default function QRWhatsAppShareScreen() {
 
   // Share via WhatsApp handler - memoized to prevent unnecessary re-renders
   const handleShareWhatsApp = useCallback(async () => {
+    const currentGuest = guests[currentIndex];
+    
     try {
       setSharing(true);
       
@@ -277,9 +230,9 @@ export default function QRWhatsAppShareScreen() {
       // Track temporary image URI for cleanup
       tempImageUris.current.add(imageUri);
       
-      // Prepare guest data for sharing
+      // Prepare guest data for sharing (convertir l'ID en number pour compatibilité)
       const guestData = {
-        id: currentGuest.id,
+        id: parseInt(currentGuest.id),
         fullName: currentGuest.fullName,
         tableName: currentGuest.tableName,
         companions: currentGuest.companions,
@@ -375,6 +328,8 @@ export default function QRWhatsAppShareScreen() {
 
   // Save to Gallery handler - memoized to prevent unnecessary re-renders
   const handleSaveToGallery = useCallback(async () => {
+    const currentGuest = guests[currentIndex];
+    
     try {
       setSaving(true);
       
@@ -406,9 +361,9 @@ export default function QRWhatsAppShareScreen() {
       // Track temporary image URI for cleanup
       tempImageUris.current.add(imageUri);
       
-      // Prepare guest data for saving
+      // Prepare guest data for saving (convertir l'ID en number pour compatibilité)
       const guestData = {
-        id: currentGuest.id,
+        id: parseInt(currentGuest.id),
         fullName: currentGuest.fullName,
         tableName: currentGuest.tableName,
         companions: currentGuest.companions,
@@ -507,6 +462,8 @@ export default function QRWhatsAppShareScreen() {
 
   // Share via System handler - memoized to prevent unnecessary re-renders
   const handleShareOther = useCallback(async () => {
+    const currentGuest = guests[currentIndex];
+    
     try {
       setSharingOther(true);
       
@@ -535,9 +492,9 @@ export default function QRWhatsAppShareScreen() {
       // Capture the QR code as an image
       const imageUri = await qrSharingService.captureQRCode(captureRef);
       
-      // Prepare guest data for sharing
+      // Prepare guest data for sharing (convertir l'ID en number pour compatibilité)
       const guestData = {
-        id: currentGuest.id,
+        id: parseInt(currentGuest.id),
         fullName: currentGuest.fullName,
         tableName: currentGuest.tableName,
         companions: currentGuest.companions,

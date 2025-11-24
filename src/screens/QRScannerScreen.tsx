@@ -1,20 +1,31 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Alert, Modal, SafeAreaView, TextInput, FlatList, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Alert, Modal, SafeAreaView, TextInput, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { markGuestPresent, getAllGuests } from '../db/database';
 import { parseQRData, GuestQRData } from '../utils/qrUtils';
 import { theme } from '../styles/theme';
 import Button from '../components/Button';
 import Card from '../components/Card';
+import { useFirebaseGuests } from '../hooks/useFirebaseGuests';
+import { Guest } from '../types/guest';
 
 export default function QRScannerScreen() {
+  // Hook Firebase pour la gestion des invités
+  const {
+    guests,
+    loading,
+    markPresent,
+    findGuestById
+  } = useFirebaseGuests();
+
+  // États locaux
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
-  const [guestInfo, setGuestInfo] = useState<GuestQRData | null>(null);
+  const [currentGuest, setCurrentGuest] = useState<Guest | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [showManualSearch, setShowManualSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<Guest[]>([]);
+  const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
     if (!permission) {
@@ -23,103 +34,150 @@ export default function QRScannerScreen() {
   }, []);
 
   const handleBarCodeScanned = async ({ data }: any) => {
-    setScanned(true);
-
-    const guestData = parseQRData(data);
+    if (processing) return; // Éviter les scans multiples
     
-    if (guestData) {
-      const allGuests = await getAllGuests();
-      const existingGuest = allGuests.find((g: any) => g.id === guestData.id);
+    setScanned(true);
+    setProcessing(true);
+
+    try {
+      // Essayer de parser le QR code comme JSON (nouveau format)
+      const guestData = parseQRData(data);
+      let guest: Guest | undefined;
       
-      if (existingGuest) {
-        setGuestInfo(guestData);
+      if (guestData) {
+        // QR code au nouveau format JSON
+        guest = findGuestById(guestData.id.toString());
+      } else {
+        // Essayer comme ID simple (ancien format)
+        try {
+          const guestId = parseInt(data);
+          guest = findGuestById(guestId.toString());
+        } catch {
+          // Essayer de chercher par nom si ce n'est pas un ID
+          guest = guests.find(g => 
+            g.fullName.toLowerCase().includes(data.toLowerCase()) ||
+            g.id === data
+          );
+        }
+      }
+      
+      if (guest) {
+        setCurrentGuest(guest);
+        
+        // Marquer automatiquement comme présent
+        if (!guest.isPresent) {
+          await markPresent(guest.id);
+          
+          // Afficher le succès
+          Alert.alert(
+            '✅ Présence confirmée !',
+            `${guest.fullName} a été marqué(e) comme présent(e) automatiquement.`,
+            [
+              {
+                text: 'Parfait !',
+                style: 'default'
+              }
+            ]
+          );
+        } else {
+          // Déjà présent
+          Alert.alert(
+            'ℹ️ Déjà présent',
+            `${guest.fullName} était déjà marqué(e) comme présent(e).`,
+            [
+              {
+                text: 'OK',
+                style: 'default'
+              }
+            ]
+          );
+        }
+        
+        // Afficher les détails de l'invité
         setShowModal(true);
       } else {
-        Alert.alert('Erreur', 'Invité non trouvé dans la base de données');
+        Alert.alert(
+          '❌ Invité non trouvé',
+          'Ce QR code ne correspond à aucun invité dans la base de données.',
+          [
+            {
+              text: 'Recherche manuelle',
+              onPress: () => setShowManualSearch(true)
+            },
+            {
+              text: 'OK',
+              style: 'cancel'
+            }
+          ]
+        );
       }
-    } else {
-      try {
-        const guestId = parseInt(data);
-        const allGuests = await getAllGuests();
-        const guest = allGuests.find((g: any) => g.id === guestId);
-        
-        if (guest) {
-          setGuestInfo({
-            id: guest.id,
-            fullName: guest.fullName,
-            tableName: guest.tableName,
-            companions: guest.companions
-          });
-          setShowModal(true);
-        } else {
-          Alert.alert('Erreur', 'Invité non trouvé');
-        }
-      } catch {
-        Alert.alert('Erreur', 'QR code invalide');
-      }
+    } catch (error) {
+      console.error('Error processing QR code:', error);
+      Alert.alert(
+        '❌ Erreur',
+        'Impossible de traiter ce QR code. Veuillez réessayer.',
+        [
+          {
+            text: 'Recherche manuelle',
+            onPress: () => setShowManualSearch(true)
+          },
+          {
+            text: 'OK',
+            style: 'cancel'
+          }
+        ]
+      );
+    } finally {
+      setProcessing(false);
+      // Permettre un nouveau scan après 2 secondes
+      setTimeout(() => setScanned(false), 2000);
     }
-
-    setTimeout(() => setScanned(false), 3000);
   };
 
-  const searchGuests = async (query: string) => {
+  const searchGuests = (query: string) => {
     setSearchQuery(query);
     if (query.trim().length < 2) {
       setSearchResults([]);
       return;
     }
 
-    const allGuests = await getAllGuests();
-    const filtered = allGuests.filter((guest: any) =>
+    const filtered = guests.filter((guest: Guest) =>
       guest.fullName.toLowerCase().includes(query.toLowerCase()) ||
       guest.tableName.toLowerCase().includes(query.toLowerCase())
     );
     setSearchResults(filtered);
   };
 
-  const selectManualGuest = (guest: any) => {
-    setGuestInfo({
-      id: guest.id,
-      fullName: guest.fullName,
-      tableName: guest.tableName,
-      companions: guest.companions
-    });
+  const selectManualGuest = async (guest: Guest) => {
+    setCurrentGuest(guest);
     setShowManualSearch(false);
-    setShowModal(true);
     setSearchQuery('');
     setSearchResults([]);
-  };
-
-  const confirmPresence = async () => {
-    if (guestInfo) {
+    
+    // Marquer automatiquement comme présent
+    if (!guest.isPresent) {
       try {
-        const allGuests = await getAllGuests();
-        const currentGuest = allGuests.find((g: any) => g.id === guestInfo.id);
-        
-        if (currentGuest?.isPresent === 1) {
-          Alert.alert(
-            'ℹ️ Déjà présent',
-            `${guestInfo.fullName} est déjà marqué(e) comme présent(e)`
-          );
-        } else {
-          await markGuestPresent(guestInfo.id);
-          Alert.alert(
-            '✅ Présence confirmée !', 
-            `${guestInfo.fullName} a été marqué(e) comme présent(e)`
-          );
-        }
-        
-        setShowModal(false);
-        setGuestInfo(null);
+        await markPresent(guest.id);
+        Alert.alert(
+          '✅ Présence confirmée !',
+          `${guest.fullName} a été marqué(e) comme présent(e).`
+        );
       } catch (error) {
         Alert.alert('Erreur', 'Impossible de marquer la présence');
       }
+    } else {
+      Alert.alert(
+        'ℹ️ Déjà présent',
+        `${guest.fullName} était déjà marqué(e) comme présent(e).`
+      );
     }
+    
+    setShowModal(true);
   };
 
   const closeModal = () => {
     setShowModal(false);
-    setGuestInfo(null);
+    setCurrentGuest(null);
   };
 
   if (!permission) {
@@ -170,8 +228,14 @@ export default function QRScannerScreen() {
 
       <View style={styles.instructions}>
         <Text style={styles.instructionText}>
-          {scanned ? 'Traitement en cours...' : 'Alignez le QR code dans le cadre'}
+          {processing ? 'Traitement en cours...' : 
+           scanned ? 'QR code détecté !' : 
+           'Alignez le QR code dans le cadre'}
         </Text>
+        
+        {processing && (
+          <ActivityIndicator size="small" color={theme.colors.primary} />
+        )}
         
         <Button
           title="Recherche manuelle"
@@ -179,6 +243,7 @@ export default function QRScannerScreen() {
           variant="outline"
           size="md"
           icon="🔍"
+          disabled={processing}
         />
       </View>
 
@@ -190,30 +255,35 @@ export default function QRScannerScreen() {
       >
         <View style={styles.modalOverlay}>
           <Card style={styles.modalContent}>
-            <Text style={styles.modalTitle}>🎉 Invité détecté</Text>
+            <Text style={styles.modalTitle}>
+              {currentGuest?.isPresent ? '✅ Invité Présent' : '🎉 Invité Détecté'}
+            </Text>
             
-            {guestInfo && (
+            {currentGuest && (
               <>
                 <View style={styles.guestInfoContainer}>
-                  <Text style={styles.guestName}>{guestInfo.fullName}</Text>
+                  <Text style={styles.guestName}>{currentGuest.fullName}</Text>
                   <View style={styles.guestDetails}>
-                    <Text style={styles.guestDetail}>📍 Table : {guestInfo.tableName}</Text>
-                    <Text style={styles.guestDetail}>👥 Accompagnants : {guestInfo.companions}</Text>
+                    <Text style={styles.guestDetail}>📍 Table : {currentGuest.tableName}</Text>
+                    <Text style={styles.guestDetail}>👥 Accompagnants : {currentGuest.companions}</Text>
+                    <Text style={[
+                      styles.guestDetail, 
+                      { 
+                        color: currentGuest.isPresent ? theme.colors.success : theme.colors.error,
+                        fontWeight: '600'
+                      }
+                    ]}>
+                      {currentGuest.isPresent ? '✅ Présent' : '⏳ Absent'}
+                    </Text>
                   </View>
                 </View>
 
                 <View style={styles.buttonContainer}>
                   <Button 
-                    title="Marquer présent"
-                    onPress={confirmPresence}
-                    icon="✅"
-                    variant="primary"
-                  />
-                  <Button 
                     title="Fermer"
                     onPress={closeModal}
-                    icon="❌"
-                    variant="outline"
+                    icon="👍"
+                    variant="primary"
                   />
                 </View>
               </>
@@ -254,8 +324,11 @@ export default function QRScannerScreen() {
                   <Text style={styles.searchResultDetails}>
                     Table: {item.tableName} • Accompagnants: {item.companions}
                   </Text>
-                  <Text style={styles.searchResultStatus}>
-                    {item.isPresent === 1 ? '✅ Déjà présent' : '⏳ Absent'}
+                  <Text style={[
+                    styles.searchResultStatus,
+                    { color: item.isPresent ? theme.colors.success : theme.colors.error }
+                  ]}>
+                    {item.isPresent ? '✅ Déjà présent' : '⏳ Absent'}
                   </Text>
                 </TouchableOpacity>
               )}

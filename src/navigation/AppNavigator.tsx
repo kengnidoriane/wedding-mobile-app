@@ -27,7 +27,7 @@ export type RootStackParamList = {
   QRShare: undefined;
   QRImage: undefined;
   Dashboard: undefined;
-  QRWhatsAppShare: { guestId?: number } | undefined;
+  QRWhatsAppShare: { guestId?: string } | undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
