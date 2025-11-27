@@ -15,7 +15,7 @@ type QRWhatsAppShareScreenParams = {
   guestId?: string;
 };
 
-// Memoized Guest Info Component to prevent unnecessary re-renders
+// Memoized Guest Info Component
 const GuestInfoDisplay = memo(({ guest }: { guest: Guest }) => (
   <View style={styles.guestInfoContainer}>
     <Text style={styles.guestName}>{guest.fullName}</Text>
@@ -30,7 +30,7 @@ const GuestInfoDisplay = memo(({ guest }: { guest: Guest }) => (
 
 GuestInfoDisplay.displayName = 'GuestInfoDisplay';
 
-// Memoized QR Code Component to prevent unnecessary re-renders
+// Memoized QR Code Component
 const QRCodeDisplay = memo(({ qrData, guestName, captureRef }: { 
   qrData: string; 
   guestName: string;
@@ -105,11 +105,9 @@ export default function QRWhatsAppShareScreen() {
   const route = useRoute<RouteProp<{ params: QRWhatsAppShareScreenParams }, 'params'>>();
   const guestIdParam = route.params?.guestId;
   
-  // Hook Firebase pour la gestion des invités
   const {
     guests,
     loading,
-    findGuestById
   } = useFirebaseGuests();
   
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -118,32 +116,26 @@ export default function QRWhatsAppShareScreen() {
   const [sharingOther, setSharingOther] = useState(false);
   const captureRef = useRef<ViewShot>(null);
   
-  // Track temporary image URIs for cleanup
   const tempImageUris = useRef<Set<string>>(new Set());
   
-  // Animation values for loading overlay
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const overlayScale = useRef(new Animated.Value(0.8)).current;
 
-  // Trouver l'index de l'invité si guestId est fourni
+  // Find guest index if guestId is provided
   useEffect(() => {
     if (guestIdParam && guests.length > 0) {
       const guestIndex = guests.findIndex((guest: Guest) => guest.id === guestIdParam);
       if (guestIndex !== -1) {
         setCurrentIndex(guestIndex);
-        console.log(`Set current index to ${guestIndex} for guest ID ${guestIdParam}`);
-      } else {
-        console.warn(`Guest with ID ${guestIdParam} not found in the list`);
       }
     }
   }, [guestIdParam, guests]);
 
-  // Animate loading overlay when loading state changes
+  // Animate loading overlay
   useEffect(() => {
     const isLoading = sharing || saving || sharingOther;
     
     if (isLoading) {
-      // Show overlay with animation
       Animated.parallel([
         Animated.timing(overlayOpacity, {
           toValue: 1,
@@ -158,7 +150,6 @@ export default function QRWhatsAppShareScreen() {
         }),
       ]).start();
     } else {
-      // Hide overlay with animation
       Animated.parallel([
         Animated.timing(overlayOpacity, {
           toValue: 0,
@@ -174,15 +165,14 @@ export default function QRWhatsAppShareScreen() {
     }
   }, [sharing, saving, sharingOther, overlayOpacity, overlayScale]);
 
-  // Cleanup temporary image URIs
+  // Cleanup temporary images
   const cleanupTempImages = useCallback(() => {
     if (tempImageUris.current.size > 0) {
-      console.log(`Cleaning up ${tempImageUris.current.size} temporary image(s)`);
       tempImageUris.current.clear();
     }
   }, []);
 
-  // Navigation functions - memoized to prevent unnecessary re-renders
+  // Navigation functions
   const nextGuest = useCallback(() => {
     if (currentIndex < guests.length - 1) {
       setCurrentIndex(currentIndex + 1);
@@ -195,44 +185,42 @@ export default function QRWhatsAppShareScreen() {
     }
   }, [currentIndex]);
 
-  // Share via WhatsApp handler - memoized to prevent unnecessary re-renders
+  // Standardized error handling
+  const handleError = useCallback((error: any, context: string, retryAction?: () => void) => {
+    console.error(`Error in ${context}:`, error);
+
+    if (error instanceof qrSharingService.QRSharingError) {
+      const buttons = retryAction ? [
+        { text: 'Réessayer', onPress: retryAction, style: 'default' as const },
+        { text: 'Annuler', style: 'cancel' as const }
+      ] : [{ text: 'OK', style: 'default' as const }];
+
+      Alert.alert('Erreur', error.message, buttons);
+    } else {
+      Alert.alert('Erreur', 'Une erreur inattendue est survenue. Veuillez réessayer.');
+    }
+  }, []);
+
+  // Share via WhatsApp
   const handleShareWhatsApp = useCallback(async () => {
-    const currentGuest = guests[currentIndex];
+    const currentGuest = guests?.[currentIndex];
     
-    // Afficher l'avertissement avant le partage
-    qrSharingService.showSharingWarning(currentGuest.fullName, async () => {
-      try {
-        setSharing(true);
+    if (!currentGuest) {
+      Alert.alert('Erreur', 'Aucun invité sélectionné');
+      return;
+    }
+    
+    try {
+      setSharing(true);
       
-      // Vérifier que la référence ViewShot est disponible
-      if (!captureRef || !captureRef.current) {
-        console.error('ViewShot reference is not available');
-        Alert.alert(
-          'Erreur',
-          'Le composant QR code n\'est pas prêt. Veuillez réessayer dans un instant.',
-          [{ text: 'OK', style: 'default' }]
-        );
+      if (!captureRef?.current) {
+        Alert.alert('Erreur', 'Le composant QR code n\'est pas prêt');
         return;
       }
       
-      // Vérifier qu'un invité est sélectionné
-      if (!currentGuest) {
-        console.error('No guest selected');
-        Alert.alert(
-          'Erreur',
-          'Aucun invité sélectionné. Veuillez réessayer.',
-          [{ text: 'OK', style: 'default' }]
-        );
-        return;
-      }
-      
-      // Capture the QR code as an image
       const imageUri = await qrSharingService.captureQRCode(captureRef);
-      
-      // Track temporary image URI for cleanup
       tempImageUris.current.add(imageUri);
       
-      // Prepare guest data for sharing
       const guestData = {
         id: currentGuest.id,
         fullName: currentGuest.fullName,
@@ -242,338 +230,112 @@ export default function QRWhatsAppShareScreen() {
         timestamp: new Date().toISOString()
       };
       
-      // Share via WhatsApp
       await qrSharingService.shareViaWhatsApp(imageUri, guestData);
-      
-      // Cleanup temporary image after successful share
       qrSharingService.cleanupTempImage(imageUri);
       tempImageUris.current.delete(imageUri);
       
-      // Show success feedback
-      Alert.alert(
-        'Succès',
-        'QR code partagé avec succès !',
-        [{ text: 'OK', style: 'default' }]
-      );
+      Alert.alert('Succès', 'QR code partagé avec succès !');
       
-    } catch (error) {
-      console.error('Error sharing via WhatsApp:', error);
-      
-      // Handle specific error types
-      if (error instanceof Error) {
-        if (error.message === qrSharingService.QRSharingError.CAPTURE_FAILED) {
-          Alert.alert(
-            'Erreur de capture',
-            qrSharingService.ERROR_MESSAGES.CAPTURE_FAILED,
-            [
-              { 
-                text: 'Réessayer', 
-                onPress: () => handleShareWhatsApp(),
-                style: 'default'
-              },
-              { 
-                text: 'Annuler', 
-                style: 'cancel'
-              }
-            ]
-          );
-        } else if (error.message === qrSharingService.QRSharingError.WHATSAPP_NOT_AVAILABLE) {
-          Alert.alert(
-            'WhatsApp non disponible',
-            qrSharingService.ERROR_MESSAGES.WHATSAPP_NOT_AVAILABLE,
-            [
-              { 
-                text: 'Partager autrement', 
-                onPress: () => handleShareOther(),
-                style: 'default'
-              },
-              { 
-                text: 'Annuler', 
-                style: 'cancel'
-              }
-            ]
-          );
-        } else if (error.message === qrSharingService.QRSharingError.SHARE_FAILED) {
-          Alert.alert(
-            'Erreur de partage',
-            qrSharingService.ERROR_MESSAGES.SHARE_FAILED,
-            [
-              { 
-                text: 'Partager autrement', 
-                onPress: () => handleShareOther(),
-                style: 'default'
-              },
-              { 
-                text: 'Annuler', 
-                style: 'cancel'
-              }
-            ]
-          );
-        } else {
-          Alert.alert(
-            'Erreur',
-            'Une erreur est survenue lors du partage. Veuillez réessayer.',
-            [{ text: 'OK', style: 'default' }]
-          );
-        }
-      } else {
-        Alert.alert(
-          'Erreur',
-          'Une erreur inattendue est survenue. Veuillez réessayer.',
-          [{ text: 'OK', style: 'default' }]
-        );
-      }
-      } finally {
-        setSharing(false);
-      }
-    });
-  }, [guests, currentIndex]);
+    } catch (error: any) {
+      handleError(error, 'WhatsApp sharing', handleShareWhatsApp);
+    } finally {
+      setSharing(false);
+    }
+  }, [guests, currentIndex, handleError]);
 
-  // Save to Gallery handler - memoized to prevent unnecessary re-renders
-  const handleSaveToGallery = useCallback(async () => {
-    const currentGuest = guests[currentIndex];
+  // Share via other methods
+  const handleShareOther = useCallback(async () => {
+    const currentGuest = guests?.[currentIndex];
     
-    // Afficher l'avertissement avant la sauvegarde
+    if (!currentGuest) {
+      Alert.alert('Erreur', 'Aucun invité sélectionné');
+      return;
+    }
+    
+    try {
+      setSharingOther(true);
+      
+      if (!captureRef?.current) {
+        Alert.alert('Erreur', 'Le composant QR code n\'est pas prêt');
+        return;
+      }
+      
+      const imageUri = await qrSharingService.captureQRCode(captureRef);
+      tempImageUris.current.add(imageUri);
+      
+      const guestData = {
+        id: currentGuest.id,
+        fullName: currentGuest.fullName,
+        tableName: currentGuest.tableName,
+        companions: currentGuest.companions,
+        type: 'wedding_invitation' as const,
+        timestamp: new Date().toISOString()
+      };
+      
+      await qrSharingService.shareViaOther(imageUri, guestData);
+      qrSharingService.cleanupTempImage(imageUri);
+      tempImageUris.current.delete(imageUri);
+      
+      Alert.alert('Succès', 'QR code partagé avec succès !');
+      
+    } catch (error: any) {
+      handleError(error, 'other sharing', handleShareOther);
+    } finally {
+      setSharingOther(false);
+    }
+  }, [guests, currentIndex, handleError]);
+
+  // Save to Gallery
+  const handleSaveToGallery = useCallback(async () => {
+    const currentGuest = guests?.[currentIndex];
+    
+    if (!currentGuest) {
+      Alert.alert('Erreur', 'Aucun invité sélectionné');
+      return;
+    }
+    
     qrSharingService.showSharingWarning(currentGuest.fullName, async () => {
       try {
         setSaving(true);
       
-      // Vérifier que la référence ViewShot est disponible
-      if (!captureRef || !captureRef.current) {
-        console.error('ViewShot reference is not available');
-        Alert.alert(
-          'Erreur',
-          'Le composant QR code n\'est pas prêt. Veuillez réessayer dans un instant.',
-          [{ text: 'OK', style: 'default' }]
-        );
-        return;
-      }
-      
-      // Vérifier qu'un invité est sélectionné
-      if (!currentGuest) {
-        console.error('No guest selected');
-        Alert.alert(
-          'Erreur',
-          'Aucun invité sélectionné. Veuillez réessayer.',
-          [{ text: 'OK', style: 'default' }]
-        );
-        return;
-      }
-      
-      // Capture the QR code as an image
-      const imageUri = await qrSharingService.captureQRCode(captureRef);
-      
-      // Track temporary image URI for cleanup
-      tempImageUris.current.add(imageUri);
-      
-      // Prepare guest data for saving
-      const guestData = {
-        id: currentGuest.id,
-        fullName: currentGuest.fullName,
-        tableName: currentGuest.tableName,
-        companions: currentGuest.companions,
-        type: 'wedding_invitation' as const,
-        timestamp: new Date().toISOString()
-      };
-      
-      // Save to gallery
-      await qrSharingService.saveToGallery(imageUri, guestData);
-      
-      // Cleanup temporary image after successful save
-      qrSharingService.cleanupTempImage(imageUri);
-      tempImageUris.current.delete(imageUri);
-      
-      // Show success notification
-      Alert.alert(
-        'Succès',
-        `QR code de ${currentGuest.fullName} sauvegardé dans votre galerie !`,
-        [{ text: 'OK', style: 'default' }]
-      );
-      
-    } catch (error) {
-      console.error('Error saving to gallery:', error);
-      
-      // Handle specific error types
-      if (error instanceof Error) {
-        if (error.message === qrSharingService.QRSharingError.CAPTURE_FAILED) {
-          Alert.alert(
-            'Erreur de capture',
-            qrSharingService.ERROR_MESSAGES.CAPTURE_FAILED,
-            [
-              { 
-                text: 'Réessayer', 
-                onPress: () => handleSaveToGallery(),
-                style: 'default'
-              },
-              { 
-                text: 'Annuler', 
-                style: 'cancel'
-              }
-            ]
-          );
-        } else if (error.message === qrSharingService.QRSharingError.PERMISSION_DENIED) {
-          Alert.alert(
-            'Permission refusée',
-            "L'accès à la galerie est nécessaire pour sauvegarder le QR code. Veuillez activer l'accès dans les paramètres de votre téléphone.",
-            [
-              { 
-                text: 'Ouvrir les paramètres', 
-                onPress: () => {
-                  console.log('User should open settings to grant permissions');
-                  // Note: On pourrait utiliser Linking.openSettings() ici
-                },
-                style: 'default'
-              },
-              { 
-                text: 'Annuler', 
-                style: 'cancel'
-              }
-            ]
-          );
-        } else if (error.message === qrSharingService.QRSharingError.SAVE_FAILED) {
-          Alert.alert(
-            'Erreur de sauvegarde',
-            qrSharingService.ERROR_MESSAGES.SAVE_FAILED,
-            [
-              { 
-                text: 'Réessayer', 
-                onPress: () => handleSaveToGallery(),
-                style: 'default'
-              },
-              { 
-                text: 'Annuler', 
-                style: 'cancel'
-              }
-            ]
-          );
-        } else {
-          Alert.alert(
-            'Erreur',
-            'Une erreur est survenue lors de la sauvegarde. Veuillez réessayer.',
-            [{ text: 'OK', style: 'default' }]
-          );
+        if (!captureRef?.current) {
+          Alert.alert('Erreur', 'Le composant QR code n\'est pas prêt');
+          return;
         }
-      } else {
-        Alert.alert(
-          'Erreur',
-          'Une erreur inattendue est survenue. Veuillez réessayer.',
-          [{ text: 'OK', style: 'default' }]
-        );
-      }
+        
+        const imageUri = await qrSharingService.captureQRCode(captureRef);
+        tempImageUris.current.add(imageUri);
+        
+        const guestData = {
+          id: currentGuest.id,
+          fullName: currentGuest.fullName,
+          tableName: currentGuest.tableName,
+          companions: currentGuest.companions,
+          type: 'wedding_invitation' as const,
+          timestamp: new Date().toISOString()
+        };
+        
+        await qrSharingService.saveToGallery(imageUri, guestData);
+        qrSharingService.cleanupTempImage(imageUri);
+        tempImageUris.current.delete(imageUri);
+        
+        Alert.alert('Succès', 'QR code sauvegardé dans la galerie !');
+        
+      } catch (error: any) {
+        handleError(error, 'gallery saving', handleSaveToGallery);
       } finally {
         setSaving(false);
       }
     });
-  }, [guests, currentIndex]);
+  }, [guests, currentIndex, handleError]);
 
-  // Share via System handler - memoized to prevent unnecessary re-renders
-  const handleShareOther = useCallback(async () => {
-    const currentGuest = guests[currentIndex];
-    
-    // Afficher l'avertissement avant le partage
-    qrSharingService.showSharingWarning(currentGuest.fullName, async () => {
-      try {
-        setSharingOther(true);
-      
-      // Vérifier que la référence ViewShot est disponible
-      if (!captureRef || !captureRef.current) {
-        console.error('ViewShot reference is not available');
-        Alert.alert(
-          'Erreur',
-          'Le composant QR code n\'est pas prêt. Veuillez réessayer dans un instant.',
-          [{ text: 'OK', style: 'default' }]
-        );
-        return;
-      }
-      
-      // Vérifier qu'un invité est sélectionné
-      if (!currentGuest) {
-        console.error('No guest selected');
-        Alert.alert(
-          'Erreur',
-          'Aucun invité sélectionné. Veuillez réessayer.',
-          [{ text: 'OK', style: 'default' }]
-        );
-        return;
-      }
-      
-      // Capture the QR code as an image
-      const imageUri = await qrSharingService.captureQRCode(captureRef);
-      
-      // Prepare guest data for sharing
-      const guestData = {
-        id: currentGuest.id,
-        fullName: currentGuest.fullName,
-        tableName: currentGuest.tableName,
-        companions: currentGuest.companions,
-        type: 'wedding_invitation' as const,
-        timestamp: new Date().toISOString()
-      };
-      
-      // Share via system native share menu
-      await qrSharingService.shareViaSystem(imageUri, guestData);
-      
-      // Cleanup temporary image after successful share
-      qrSharingService.cleanupTempImage(imageUri);
-      tempImageUris.current.delete(imageUri);
-      
-    } catch (error) {
-      console.error('Error sharing via system:', error);
-      
-      // Handle specific error types
-      if (error instanceof Error) {
-        if (error.message === qrSharingService.QRSharingError.CAPTURE_FAILED) {
-          Alert.alert(
-            'Erreur de capture',
-            qrSharingService.ERROR_MESSAGES.CAPTURE_FAILED,
-            [
-              { 
-                text: 'Réessayer', 
-                onPress: () => handleShareOther(),
-                style: 'default'
-              },
-              { 
-                text: 'Annuler', 
-                style: 'cancel'
-              }
-            ]
-          );
-        } else if (error.message === qrSharingService.QRSharingError.SHARE_FAILED) {
-          Alert.alert(
-            'Erreur de partage',
-            'Impossible de partager le QR code. Veuillez réessayer.',
-            [
-              { 
-                text: 'Réessayer', 
-                onPress: () => handleShareOther(),
-                style: 'default'
-              },
-              { 
-                text: 'Annuler', 
-                style: 'cancel'
-              }
-            ]
-          );
-        } else {
-          Alert.alert(
-            'Erreur',
-            'Une erreur est survenue lors du partage. Veuillez réessayer.',
-            [{ text: 'OK', style: 'default' }]
-          );
-        }
-      } else {
-        Alert.alert(
-          'Erreur',
-          'Une erreur inattendue est survenue. Veuillez réessayer.',
-          [{ text: 'OK', style: 'default' }]
-        );
-      }
-    } finally {
-      setSharingOther(false);
-    }
-  }, [guests, currentIndex]);
+  // Cleanup effect
+  useEffect(() => {
+    return () => {
+      cleanupTempImages();
+    };
+  }, [cleanupTempImages]);
 
-  // Empty state when no guests are available
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -585,96 +347,93 @@ export default function QRWhatsAppShareScreen() {
     );
   }
 
-  if (guests.length === 0) {
+  if (!guests || guests.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centerContainer}>
-          <Text style={styles.emptyTitle}>Aucun invité trouvé</Text>
-          <Text style={styles.emptySubtext}>
-            Ajoutez des invités dans la liste pour pouvoir générer et partager leurs QR codes
-          </Text>
+          <Text style={styles.emptyText}>Aucun invité trouvé</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   const currentGuest = guests[currentIndex];
+  if (!currentGuest) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centerContainer}>
+          <Text style={styles.emptyText}>Invité non trouvé</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   const qrData = generateQRData(currentGuest);
 
+  // @ts-ignore
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Partage QR Code</Text>
-        <Text style={styles.counter}>
-          {currentIndex + 1} / {guests.length}
-        </Text>
-      </View>
-
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <Card style={styles.contentCard}>
-          {/* Guest Information Display - Memoized */}
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <Card style={styles.card}>
+          <Text style={styles.title}>QR Code - Invitation</Text>
+          
           <GuestInfoDisplay guest={currentGuest} />
-
-          {/* QR Code Display - Memoized */}
+          
           <QRCodeDisplay 
             qrData={qrData} 
             guestName={currentGuest.fullName}
-            captureRef={captureRef as React.RefObject<ViewShot>}
+            captureRef={captureRef}
           />
-
-          {/* Share Actions */}
-          <View style={styles.actionsContainer}>
+          
+          <View style={styles.navigationContainer}>
             <Button
-              title="📱 Partager via WhatsApp"
+              title="← Précédent"
+              onPress={prevGuest}
+              disabled={currentIndex === 0}
+              variant="outline"
+              style={styles.navButton}
+            />
+            
+            <Text style={styles.counterText}>
+              {currentIndex + 1} / {guests.length}
+            </Text>
+            
+            <Button
+              title="Suivant →"
+              onPress={nextGuest}
+              disabled={currentIndex === guests.length - 1}
+              variant="outline"
+              style={styles.navButton}
+            />
+          </View>
+          
+          <View style={styles.actionContainer}>
+            <Button
+              title="📱 Partager WhatsApp"
               onPress={handleShareWhatsApp}
-              variant="primary"
-              size="lg"
               disabled={sharing || saving || sharingOther}
+              style={styles.actionButton}
             />
-            <Button
-              title="💾 Sauvegarder dans galerie"
-              onPress={handleSaveToGallery}
-              variant="secondary"
-              size="lg"
-              disabled={sharing || saving || sharingOther}
-            />
+            
             <Button
               title="📤 Partager autrement"
               onPress={handleShareOther}
-              variant="outline"
-              size="lg"
               disabled={sharing || saving || sharingOther}
+              variant="outline"
+              style={styles.actionButton}
+            />
+            
+            <Button
+              title="💾 Sauvegarder"
+              onPress={handleSaveToGallery}
+              disabled={sharing || saving || sharingOther}
+              variant="outline"
+              style={styles.actionButton}
             />
           </View>
         </Card>
       </ScrollView>
-
-      {/* Navigation Controls */}
-      <View style={styles.navigationContainer}>
-        <View style={styles.navigationButton}>
-          <Button
-            title="Précédent"
-            onPress={prevGuest}
-            variant="outline"
-            size="md"
-            disabled={currentIndex === 0}
-          />
-        </View>
-        <View style={styles.navigationButton}>
-          <Button
-            title="Suivant"
-            onPress={nextGuest}
-            variant="outline"
-            size="md"
-            disabled={currentIndex === guests.length - 1}
-          />
-        </View>
-      </View>
-
-      {/* Loading Indicator Overlay - Memoized */}
+      
       <LoadingOverlay 
         visible={sharing || saving || sharingOther}
         saving={saving}
@@ -692,126 +451,99 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: theme.spacing.md,
+    padding: theme.spacing.md,
+  },
+  card: {
+    flex: 1,
+    padding: theme.spacing.lg,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+    textAlign: 'center',
+    marginBottom: theme.spacing.lg,
+  },
+  guestInfoContainer: {
+    backgroundColor: theme.colors.surface,
+    padding: theme.spacing.md,
+    borderRadius: theme.borderRadius.md,
+    marginBottom: theme.spacing.lg,
+  },
+  guestName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: theme.colors.primary,
+    textAlign: 'center',
+    marginBottom: theme.spacing.sm,
+  },
+  guestDetailRow: {
+    marginBottom: theme.spacing.xs,
+  },
+  guestDetail: {
+    fontSize: 16,
+    color: theme.colors.text,
+    textAlign: 'center',
+  },
+  qrContainer: {
+    alignItems: 'center',
+    marginBottom: theme.spacing.lg,
+  },
+  qrWrapper: {
+    backgroundColor: '#FFFFFF',
+    padding: theme.spacing.md,
+    borderRadius: theme.borderRadius.md,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  guestNameLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#000000',
+    marginTop: theme.spacing.sm,
+    textAlign: 'center',
+  },
+  navigationContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: theme.spacing.lg,
+  },
+  navButton: {
+    flex: 0.3,
+  },
+  counterText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+  },
+  actionContainer: {
+    gap: theme.spacing.md,
+  },
+  actionButton: {
+    marginBottom: theme.spacing.sm,
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: theme.spacing.lg,
   },
   loadingText: {
-    ...theme.typography.body,
-    color: theme.colors.textSecondary,
     marginTop: theme.spacing.md,
-  },
-  emptyTitle: {
-    ...theme.typography.h2,
-    color: theme.colors.text,
-    marginBottom: theme.spacing.md,
-    textAlign: 'center',
-  },
-  emptySubtext: {
-    ...theme.typography.body,
-    color: theme.colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 24,
-    maxWidth: 300,
-  },
-  header: {
-    alignItems: 'center',
-    paddingTop: theme.spacing.md,
-    paddingBottom: theme.spacing.lg,
-    paddingHorizontal: theme.spacing.lg,
-    backgroundColor: theme.colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-    ...theme.shadows.sm,
-  },
-  title: {
-    ...theme.typography.h2,
-    color: theme.colors.text,
-    marginBottom: theme.spacing.sm,
-  },
-  counter: {
-    ...theme.typography.h3,
-    color: theme.colors.primary,
-    fontWeight: '600',
-  },
-  contentCard: {
-    marginHorizontal: theme.spacing.lg,
-    marginTop: theme.spacing.lg,
-    alignItems: 'center',
-    ...theme.shadows.lg,
-  },
-  guestInfoContainer: {
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
-    backgroundColor: theme.colors.background,
-    borderRadius: theme.borderRadius.md,
-  },
-  guestName: {
-    ...theme.typography.h2,
-    color: theme.colors.text,
-    marginBottom: theme.spacing.md,
-    textAlign: 'center',
-    paddingHorizontal: theme.spacing.sm,
-  },
-  guestDetailRow: {
-    marginVertical: theme.spacing.xs,
-    paddingHorizontal: theme.spacing.sm,
-  },
-  guestDetail: {
-    ...theme.typography.body,
-    color: theme.colors.textSecondary,
-    textAlign: 'center',
     fontSize: 16,
-    lineHeight: 24,
+    color: theme.colors.text,
   },
-  qrContainer: {
-    backgroundColor: '#FFFFFF',
-    padding: theme.spacing.xl,
-    borderRadius: theme.borderRadius.lg,
-    ...theme.shadows.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  qrWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  guestNameLabel: {
-    ...theme.typography.body,
-    color: '#000000',
-    marginTop: theme.spacing.md,
-    fontWeight: '600',
+  emptyText: {
+    fontSize: 18,
+    color: theme.colors.text,
     textAlign: 'center',
-    maxWidth: 250,
-  },
-  actionsContainer: {
-    width: '100%',
-    marginTop: theme.spacing.xl,
-    gap: theme.spacing.md,
-    paddingHorizontal: theme.spacing.xs,
-  },
-  navigationContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.lg,
-    paddingBottom: theme.spacing.md,
-    gap: theme.spacing.md,
-    backgroundColor: theme.colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-    ...theme.shadows.sm,
-  },
-  navigationButton: {
-    flex: 1,
-    maxWidth: '48%',
   },
   loadingOverlay: {
     position: 'absolute',
@@ -819,9 +551,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 1000,
   },
   loadingContainer: {
     backgroundColor: theme.colors.surface,
@@ -829,13 +562,11 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.xl,
     alignItems: 'center',
     minWidth: 200,
-    ...theme.shadows.lg,
   },
   loadingOverlayText: {
-    ...theme.typography.body,
-    color: theme.colors.text,
     marginTop: theme.spacing.md,
+    fontSize: 16,
+    color: theme.colors.text,
     textAlign: 'center',
-    fontWeight: '500',
   },
 });

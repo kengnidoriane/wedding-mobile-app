@@ -97,7 +97,7 @@ ${qrData}
     );
   }
 
-  const currentGuest = guests[currentIndex];
+  const currentGuest = guests?.[currentIndex];
 
   return (
     <SafeAreaView style={styles.container}>

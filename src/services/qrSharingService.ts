@@ -115,97 +115,25 @@ export const shareViaWhatsApp = async (
   guest: GuestQRData
 ): Promise<void> => {
   try {
-    // Valider les paramètres
-    if (!imageUri || typeof imageUri !== 'string') {
-      console.error('Invalid image URI provided:', imageUri);
+    if (!imageUri || !guest?.fullName) {
       throw new Error(QRSharingError.SHARE_FAILED);
     }
     
-    if (!guest || !guest.fullName) {
-      console.error('Invalid guest data provided:', guest);
+    // Partager directement l'image QR code
+    const isAvailable = await Sharing.isAvailableAsync();
+    
+    if (!isAvailable) {
       throw new Error(QRSharingError.SHARE_FAILED);
     }
     
-    // Générer le message d'accompagnement
-    const shareMessage = generateShareMessage(guest);
-    
-    // Afficher le message avec options de partage
-    Alert.alert(
-      '📱 Message pour WhatsApp',
-      `Voici le message à envoyer avec le QR code :\n\n${shareMessage}`,
-      [
-        {
-          text: 'Copier le message',
-          onPress: async () => {
-            // Copier le message dans le presse-papiers
-            try {
-              const { setStringAsync } = await import('expo-clipboard');
-              await setStringAsync(shareMessage);
-              
-              // Puis partager l'image
-              const isAvailable = await Sharing.isAvailableAsync();
-              if (isAvailable) {
-                await Sharing.shareAsync(imageUri, {
-                  mimeType: 'image/png',
-                  dialogTitle: `QR Code - ${guest.fullName}`,
-                  UTI: 'public.png'
-                });
-                
-                Alert.alert(
-                  '✅ Prêt !',
-                  'Le message a été copié et le QR code va être partagé. Collez le message dans WhatsApp puis envoyez l\'image.',
-                  [{ text: 'Compris', style: 'default' }]
-                );
-              }
-            } catch (clipboardError) {
-              console.warn('Could not copy to clipboard:', clipboardError);
-              // Fallback: juste partager l'image
-              const isAvailable = await Sharing.isAvailableAsync();
-              if (isAvailable) {
-                await Sharing.shareAsync(imageUri, {
-                  mimeType: 'image/png',
-                  dialogTitle: `QR Code - ${guest.fullName}`,
-                  UTI: 'public.png'
-                });
-              }
-            }
-          }
-        },
-        {
-          text: 'Juste l\'image',
-          onPress: async () => {
-            // Partager seulement l'image
-            const isAvailable = await Sharing.isAvailableAsync();
-            if (isAvailable) {
-              await Sharing.shareAsync(imageUri, {
-                mimeType: 'image/png',
-                dialogTitle: `QR Code - ${guest.fullName}`,
-                UTI: 'public.png'
-              });
-            }
-          }
-        },
-        {
-          text: 'Annuler',
-          style: 'cancel'
-        }
-      ],
-      { cancelable: true }
-    );
-    
-    console.log('Successfully prepared WhatsApp share for guest:', guest.fullName);
+    await Sharing.shareAsync(imageUri, {
+      mimeType: 'image/png',
+      dialogTitle: `QR Code - ${guest.fullName}`,
+      UTI: 'public.png'
+    });
     
   } catch (error) {
     console.error('Error sharing via WhatsApp:', error);
-    
-    // Si c'est déjà notre erreur personnalisée, la relancer
-    if (error instanceof Error && 
-        (error.message === QRSharingError.SHARE_FAILED || 
-         error.message === QRSharingError.WHATSAPP_NOT_AVAILABLE)) {
-      throw error;
-    }
-    
-    // Sinon, créer une nouvelle erreur
     throw new Error(QRSharingError.SHARE_FAILED);
   }
 };
@@ -309,6 +237,20 @@ export const saveToGallery = async (
     // Sinon, créer une nouvelle erreur
     throw new Error(QRSharingError.SAVE_FAILED);
   }
+};
+
+/**
+ * Partage l'image via d'autres méthodes
+ */
+export const shareViaOther = async (
+  imageUri: string,
+  guest: GuestQRData
+): Promise<void> => {
+  await Sharing.shareAsync(imageUri, {
+    mimeType: 'image/png',
+    dialogTitle: `QR Code - ${guest.fullName}`,
+    UTI: 'public.png'
+  });
 };
 
 /**
