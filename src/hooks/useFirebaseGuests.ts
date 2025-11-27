@@ -7,8 +7,11 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Alert } from 'react-native';
 
 import { firebaseService } from '../services/firebaseService';
+import { offlineService } from '../services/offlineService';
+import { syncService } from '../services/syncService';
 import { useErrorHandler } from './useErrorHandler';
 import { useLoading } from './useLoading';
+import { useNetworkStatus } from './useNetworkStatus';
 import { 
   Guest, 
   CreateGuestData, 
@@ -36,6 +39,11 @@ interface UseFirebaseGuestsReturn {
   // États de chargement standardisés
   isLoading: (key?: string) => boolean;
   withLoading: <T>(key: string, asyncFn: () => Promise<T>) => Promise<T>;
+  
+  // Mode hors-ligne
+  isOnline: boolean | null;
+  pendingActionsCount: number;
+  syncPendingActions: () => Promise<void>;
   
   // Actions
   addGuest: (guestData: CreateGuestData) => Promise<void>;
@@ -69,6 +77,10 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pendingActionsCount, setPendingActionsCount] = useState(0);
+  
+  // État réseau
+  const { isOnline } = useNetworkStatus();
   
   // Gestion d'erreurs standardisée
   const { showError, showAlert, clearError: clearErrorHandler } = useErrorHandler();
@@ -123,22 +135,40 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
         setLoading(true);
         updateSyncState(SyncStatus.SYNCING);
 
-        // Initialiser Firebase
-        await firebaseService.initialize();
+        // Initialize offline service
+        await offlineService.initialize();
+        setPendingActionsCount(offlineService.getPendingActionsCount());
 
-        if (!mounted) return;
+        if (isOnline) {
+          // Online mode: initialize Firebase and sync
+          await firebaseService.initialize();
 
-        // Démarrer l'écoute des invités
-        const unsubscribe = firebaseService.subscribeToGuests((updatedGuests) => {
           if (!mounted) return;
-          
-          setGuests(updatedGuests);
-          setLoading(false);
-          updateSyncState(SyncStatus.SUCCESS);
-          setError(null);
-        });
 
-        unsubscribeRef.current = unsubscribe;
+          // Start listening to guests
+          const unsubscribe = firebaseService.subscribeToGuests(async (updatedGuests) => {
+            if (!mounted) return;
+            
+            setGuests(updatedGuests);
+            await offlineService.cacheGuests(updatedGuests);
+            setLoading(false);
+            updateSyncState(SyncStatus.SUCCESS);
+            setError(null);
+            
+            // Sync pending actions if any
+            if (offlineService.hasPendingActions()) {
+              syncPendingActions();
+            }
+          });
+
+          unsubscribeRef.current = unsubscribe;
+        } else {
+          // Offline mode: load cached data
+          const optimisticGuests = await offlineService.getOptimisticGuests();
+          setGuests(optimisticGuests);
+          setLoading(false);
+          updateSyncState(SyncStatus.ERROR, 'Mode hors-ligne');
+        }
 
       } catch (error) {
         if (mounted) {
@@ -175,15 +205,27 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
   const addGuest = useCallback(async (guestData: CreateGuestData) => {
     await withLoading('addGuest', async () => {
       try {
-        updateSyncState(SyncStatus.SYNCING);
-        await firebaseService.addGuest(guestData);
-        updateSyncState(SyncStatus.SUCCESS);
+        if (isOnline) {
+          updateSyncState(SyncStatus.SYNCING);
+          await firebaseService.addGuest(guestData);
+          updateSyncState(SyncStatus.SUCCESS);
+        } else {
+          // Offline: queue action
+          await offlineService.addPendingAction({
+            type: 'ADD_GUEST',
+            data: guestData
+          });
+          
+          const optimisticGuests = await offlineService.getOptimisticGuests();
+          setGuests(optimisticGuests);
+          setPendingActionsCount(offlineService.getPendingActionsCount());
+        }
       } catch (error) {
         handleError(error, 'adding guest');
         throw error;
       }
     });
-  }, [updateSyncState, handleError, withLoading]);
+  }, [updateSyncState, handleError, withLoading, isOnline]);
 
   /**
    * Met à jour un invité existant
@@ -207,15 +249,27 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
   const deleteGuest = useCallback(async (guestId: string) => {
     await withLoading('deleteGuest', async () => {
       try {
-        updateSyncState(SyncStatus.SYNCING);
-        await firebaseService.deleteGuest(guestId);
-        updateSyncState(SyncStatus.SUCCESS);
+        if (isOnline) {
+          updateSyncState(SyncStatus.SYNCING);
+          await firebaseService.deleteGuest(guestId);
+          updateSyncState(SyncStatus.SUCCESS);
+        } else {
+          // Offline: queue action
+          await offlineService.addPendingAction({
+            type: 'DELETE_GUEST',
+            data: { guestId }
+          });
+          
+          const optimisticGuests = await offlineService.getOptimisticGuests();
+          setGuests(optimisticGuests);
+          setPendingActionsCount(offlineService.getPendingActionsCount());
+        }
       } catch (error) {
         handleError(error, 'deleting guest');
         throw error;
       }
     });
-  }, [updateSyncState, handleError, withLoading]);
+  }, [updateSyncState, handleError, withLoading, isOnline]);
 
   /**
    * Marque un invité comme présent
@@ -223,15 +277,27 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
   const markPresent = useCallback(async (guestId: string) => {
     await withLoading('markPresent', async () => {
       try {
-        updateSyncState(SyncStatus.SYNCING);
-        await firebaseService.markGuestPresent(guestId);
-        updateSyncState(SyncStatus.SUCCESS);
+        if (isOnline) {
+          updateSyncState(SyncStatus.SYNCING);
+          await firebaseService.markGuestPresent(guestId);
+          updateSyncState(SyncStatus.SUCCESS);
+        } else {
+          // Offline: queue action
+          await offlineService.addPendingAction({
+            type: 'MARK_PRESENT',
+            data: { guestId }
+          });
+          
+          const optimisticGuests = await offlineService.getOptimisticGuests();
+          setGuests(optimisticGuests);
+          setPendingActionsCount(offlineService.getPendingActionsCount());
+        }
       } catch (error) {
         handleError(error, 'marking guest present');
         throw error;
       }
     });
-  }, [updateSyncState, handleError, withLoading]);
+  }, [updateSyncState, handleError, withLoading, isOnline]);
 
   /**
    * Marque un invité comme absent
@@ -239,15 +305,27 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
   const markAbsent = useCallback(async (guestId: string) => {
     await withLoading('markAbsent', async () => {
       try {
-        updateSyncState(SyncStatus.SYNCING);
-        await firebaseService.markGuestAbsent(guestId);
-        updateSyncState(SyncStatus.SUCCESS);
+        if (isOnline) {
+          updateSyncState(SyncStatus.SYNCING);
+          await firebaseService.markGuestAbsent(guestId);
+          updateSyncState(SyncStatus.SUCCESS);
+        } else {
+          // Offline: queue action
+          await offlineService.addPendingAction({
+            type: 'MARK_ABSENT',
+            data: { guestId }
+          });
+          
+          const optimisticGuests = await offlineService.getOptimisticGuests();
+          setGuests(optimisticGuests);
+          setPendingActionsCount(offlineService.getPendingActionsCount());
+        }
       } catch (error) {
         handleError(error, 'marking guest absent');
         throw error;
       }
     });
-  }, [updateSyncState, handleError, withLoading]);
+  }, [updateSyncState, handleError, withLoading, isOnline]);
 
   /**
    * Rafraîchit les statistiques
@@ -323,6 +401,34 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
     }
   }, [guests]);
 
+  // Sync pending actions when coming back online
+  const syncPendingActions = useCallback(async () => {
+    if (!isOnline || !offlineService.hasPendingActions()) return;
+    
+    updateSyncState(SyncStatus.SYNCING);
+    
+    try {
+      const result = await syncService.syncPendingActions();
+      setPendingActionsCount(offlineService.getPendingActionsCount());
+      
+      if (result.success) {
+        updateSyncState(SyncStatus.SUCCESS);
+      } else {
+        updateSyncState(SyncStatus.ERROR, result.error || 'Erreur de synchronisation');
+      }
+    } catch (err) {
+      console.error('Sync error:', err);
+      updateSyncState(SyncStatus.ERROR, 'Erreur de synchronisation');
+    }
+  }, [isOnline, updateSyncState]);
+
+  // Auto-sync when coming back online
+  useEffect(() => {
+    if (isOnline && offlineService.hasPendingActions()) {
+      syncPendingActions();
+    }
+  }, [isOnline, syncPendingActions]);
+
   return {
     // État des données
     guests,
@@ -353,6 +459,11 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
     
     // États de chargement standardisés
     isLoading,
-    withLoading
+    withLoading,
+    
+    // Mode hors-ligne
+    isOnline,
+    pendingActionsCount,
+    syncPendingActions
   };
 };

@@ -34,7 +34,10 @@ export default function GuestListScreen({ navigation }: any) {
     clearError,
     showError,
     showAlert,
-    isLoading
+    isLoading,
+    isOnline,
+    pendingActionsCount,
+    syncPendingActions
   } = useFirebaseGuests();
   
   // Gestionnaire d'erreurs local pour les opérations UI
@@ -244,9 +247,21 @@ export default function GuestListScreen({ navigation }: any) {
       
       <View style={styles.header}>
         <Text style={styles.title}>Invités</Text>
-        <TouchableOpacity onPress={handleImportCSV}>
-          <Text style={styles.headerAction}>Import</Text>
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          {!isOnline && (
+            <View style={styles.offlineIndicator}>
+              <Text style={styles.offlineText}>Hors-ligne</Text>
+            </View>
+          )}
+          {pendingActionsCount > 0 && (
+            <View style={styles.pendingIndicator}>
+              <Text style={styles.pendingText}>{pendingActionsCount}</Text>
+            </View>
+          )}
+          <TouchableOpacity onPress={handleImportCSV}>
+            <Text style={styles.headerAction}>Import</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.searchContainer}>
@@ -410,10 +425,39 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#000000',
   },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   headerAction: {
     fontSize: 17,
     color: '#007AFF',
     fontWeight: '400',
+  },
+  offlineIndicator: {
+    backgroundColor: '#FF9500',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  offlineText: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  pendingIndicator: {
+    backgroundColor: '#FF3B30',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    minWidth: 20,
+    alignItems: 'center',
+  },
+  pendingText: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: 'bold',
   },
   searchContainer: {
     paddingHorizontal: 16,
