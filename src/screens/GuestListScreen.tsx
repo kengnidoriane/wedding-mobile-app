@@ -17,6 +17,8 @@ import { useGuestFilters } from '../hooks/useGuestFilters';
 import { validationService } from '../services/validationService';
 import { CreateGuestData, SyncStatus } from '../types/guest';
 import FilterModal from '../components/FilterModal';
+import ExportModal from '../components/ExportModal';
+import { pdfExportService } from '../services/pdfExportService';
 
 export default function GuestListScreen({ navigation }: any) {
   // Hook Firebase pour la gestion des invités
@@ -37,7 +39,8 @@ export default function GuestListScreen({ navigation }: any) {
     isLoading,
     isOnline,
     pendingActionsCount,
-    syncPendingActions
+    syncPendingActions,
+    exportToPDF
   } = useFirebaseGuests();
   
   // Gestionnaire d'erreurs local pour les opérations UI
@@ -60,6 +63,7 @@ export default function GuestListScreen({ navigation }: any) {
   // État local pour l'interface
   const [modalVisible, setModalVisible] = useState(false);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [exportModalVisible, setExportModalVisible] = useState(false);
   const [newFullName, setNewFullName] = useState('');
   const [newTableName, setNewTableName] = useState('');
   const [newCompanions, setNewCompanions] = useState('');
@@ -234,6 +238,17 @@ export default function GuestListScreen({ navigation }: any) {
 
   const keyExtractor = useCallback((item: any) => item.id.toString(), []);
 
+  const handleExportPDF = useCallback(async (options: any) => {
+    try {
+      const uri = await exportToPDF(options);
+      await pdfExportService.shareExportedPDF(uri, 'liste-invites-mariage.pdf');
+      setExportModalVisible(false);
+    } catch (error) {
+      console.error('Export error:', error);
+      showLocalError('Impossible d\'exporter le PDF', 'export PDF');
+    }
+  }, [exportToPDF, showLocalError]);
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Affichage des erreurs locales */}
@@ -258,6 +273,9 @@ export default function GuestListScreen({ navigation }: any) {
               <Text style={styles.pendingText}>{pendingActionsCount}</Text>
             </View>
           )}
+          <TouchableOpacity onPress={() => setExportModalVisible(true)}>
+            <Text style={styles.headerAction}>Export</Text>
+          </TouchableOpacity>
           <TouchableOpacity onPress={handleImportCSV}>
             <Text style={styles.headerAction}>Import</Text>
           </TouchableOpacity>
@@ -400,6 +418,15 @@ export default function GuestListScreen({ navigation }: any) {
         onApply={setFilters}
         currentFilters={filters}
         availableTables={availableTables}
+      />
+
+      <ExportModal
+        visible={exportModalVisible}
+        onClose={() => setExportModalVisible(false)}
+        onExport={handleExportPDF}
+        loading={isLoading('exportToPDF')}
+        guestCount={guests.length}
+        presentCount={statsData.presentCount}
       />
     </SafeAreaView>
   );

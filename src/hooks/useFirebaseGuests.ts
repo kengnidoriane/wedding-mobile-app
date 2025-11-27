@@ -9,6 +9,8 @@ import { Alert } from 'react-native';
 import { firebaseService } from '../services/firebaseService';
 import { offlineService } from '../services/offlineService';
 import { syncService } from '../services/syncService';
+import { notificationService } from '../services/notificationService';
+import { pdfExportService, ExportOptions } from '../services/pdfExportService';
 import { useErrorHandler } from './useErrorHandler';
 import { useLoading } from './useLoading';
 import { useNetworkStatus } from './useNetworkStatus';
@@ -45,6 +47,9 @@ interface UseFirebaseGuestsReturn {
   pendingActionsCount: number;
   syncPendingActions: () => Promise<void>;
   
+  // Export
+  exportToPDF: (options: ExportOptions) => Promise<string>;
+  
   // Actions
   addGuest: (guestData: CreateGuestData) => Promise<void>;
   updateGuest: (guestId: string, updateData: UpdateGuestData) => Promise<void>;
@@ -53,6 +58,7 @@ interface UseFirebaseGuestsReturn {
   markAbsent: (guestId: string) => Promise<void>;
   refreshStats: () => Promise<void>;
   importGuests: (guests: CreateGuestData[]) => Promise<void>;
+  exportToPDF: (options: ExportOptions) => Promise<string>;
   
   // Utilitaires
   findGuestById: (id: string) => Guest | undefined;
@@ -135,8 +141,9 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
         setLoading(true);
         updateSyncState(SyncStatus.SYNCING);
 
-        // Initialize offline service
+        // Initialize services
         await offlineService.initialize();
+        await notificationService.initialize();
         setPendingActionsCount(offlineService.getPendingActionsCount());
 
         if (isOnline) {
@@ -277,10 +284,17 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
   const markPresent = useCallback(async (guestId: string) => {
     await withLoading('markPresent', async () => {
       try {
+        const guest = guests.find(g => g.id === guestId);
+        
         if (isOnline) {
           updateSyncState(SyncStatus.SYNCING);
           await firebaseService.markGuestPresent(guestId);
           updateSyncState(SyncStatus.SUCCESS);
+          
+          // Send notification for guest arrival
+          if (guest && !guest.isPresent) {
+            await notificationService.notifyGuestArrival({ ...guest, isPresent: true });
+          }
         } else {
           // Offline: queue action
           await offlineService.addPendingAction({
@@ -291,13 +305,18 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
           const optimisticGuests = await offlineService.getOptimisticGuests();
           setGuests(optimisticGuests);
           setPendingActionsCount(offlineService.getPendingActionsCount());
+          
+          // Send notification for offline arrival
+          if (guest && !guest.isPresent) {
+            await notificationService.notifyGuestArrival({ ...guest, isPresent: true });
+          }
         }
       } catch (error) {
         handleError(error, 'marking guest present');
         throw error;
       }
     });
-  }, [updateSyncState, handleError, withLoading, isOnline]);
+  }, [updateSyncState, handleError, withLoading, isOnline, guests]);
 
   /**
    * Marque un invité comme absent
@@ -429,6 +448,19 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
     }
   }, [isOnline, syncPendingActions]);
 
+  // Export to PDF
+  const exportToPDF = useCallback(async (options: ExportOptions): Promise<string> => {
+    return await withLoading('exportToPDF', async () => {
+      try {
+        const uri = await pdfExportService.exportGuestList(guests, options);
+        return uri;
+      } catch (error) {
+        handleError(error, 'PDF export');
+        throw error;
+      }
+    });
+  }, [guests, withLoading, handleError]);
+
   return {
     // État des données
     guests,
@@ -447,6 +479,7 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
     markAbsent,
     refreshStats,
     importGuests,
+    exportToPDF,
     
     // Utilitaires
     findGuestById,
