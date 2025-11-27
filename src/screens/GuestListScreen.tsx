@@ -235,79 +235,27 @@ export default function GuestListScreen({ navigation }: any) {
       )}
       
       <View style={styles.header}>
-        <Text style={styles.title}>Liste des invités</Text>
-        <Text style={styles.subtitle}>Gérez vos invitations</Text>
-        
-        {/* Indicateur de synchronisation */}
-        <View style={styles.syncIndicator}>
-          {syncState.status === SyncStatus.SYNCING && (
-            <View style={styles.syncingContainer}>
-              <ActivityIndicator size="small" color={theme.colors.primary} />
-              <Text style={styles.syncText}>Synchronisation...</Text>
-            </View>
-          )}
-          {syncState.status === SyncStatus.SUCCESS && syncState.lastSync && (
-            <Text style={styles.syncText}>
-              ✅ Synchronisé {new Date(syncState.lastSync).toLocaleTimeString()}
-            </Text>
-          )}
-          {syncState.status === SyncStatus.ERROR && (
-            <TouchableOpacity onPress={clearError} style={styles.errorContainer}>
-              <Text style={styles.errorText}>❌ Erreur de sync - Appuyer pour réessayer</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        <Text style={styles.title}>Invités</Text>
+        <TouchableOpacity onPress={handleImportCSV}>
+          <Text style={styles.headerAction}>Import</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.searchContainer}>
-        <TextInput
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Rechercher par nom, table ou nb accompagnants..."
-          style={styles.searchInput}
-          placeholderTextColor={theme.colors.textLight}
-          clearButtonMode="while-editing"
-        />
+        <View style={styles.searchBar}>
+          <Text style={styles.searchIcon}>🔍</Text>
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Rechercher"
+            style={styles.searchInput}
+            placeholderTextColor="#8E8E93"
+          />
+        </View>
       </View>
 
-      <Card style={styles.statsCard}>
-        <Text style={styles.statsTitle}>📊 Statistiques</Text>
-        <View style={styles.statsGrid}>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{statsData.total}</Text>
-            <Text style={styles.statLabel}>Invités</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={[styles.statNumber, { color: theme.colors.success }]}>{statsData.presentCount}</Text>
-            <Text style={styles.statLabel}>Présents</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={[styles.statNumber, { color: theme.colors.error }]}>{statsData.absentCount}</Text>
-            <Text style={styles.statLabel}>Absents</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{statsData.totalCompanions}</Text>
-            <Text style={styles.statLabel}>Accompagnants</Text>
-          </View>
-        </View>
-      </Card>
-
-      <View style={styles.actionButtons}>
-        <LoadingButton
-          title="Importer CSV"
-          onPress={handleImportCSV}
-          variant="secondary"
-          size="md"
-          icon="📁"
-          loading={isLoading('importGuests')}
-        />
-        <Button
-          title="QR Codes"
-          onPress={() => navigation.navigate('QRBulkGenerator')}
-          variant="primary"
-          size="md"
-          icon="📱"
-        />
+      <View style={styles.statsBar}>
+        <Text style={styles.statsText}>✅ {statsData.presentCount} présents • ❌ {statsData.absentCount} absents</Text>
       </View>
 
       <FlatList
@@ -392,87 +340,88 @@ export default function GuestListScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+    backgroundColor: '#F2F2F7',
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: theme.spacing.lg,
-    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: '#F2F2F7',
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#C6C6C8',
   },
   title: {
-    ...theme.typography.h2,
-    color: theme.colors.text,
-    marginBottom: theme.spacing.xs,
+    fontSize: 34,
+    fontWeight: 'bold',
+    color: '#000000',
   },
-  subtitle: {
-    ...theme.typography.caption,
-    color: theme.colors.textSecondary,
+  headerAction: {
+    fontSize: 17,
+    color: '#007AFF',
+    fontWeight: '400',
   },
   searchContainer: {
-    paddingHorizontal: theme.spacing.lg,
-    marginBottom: theme.spacing.md,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#F2F2F7',
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  searchIcon: {
+    fontSize: 16,
+    marginRight: 8,
+    color: '#8E8E93',
   },
   searchInput: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.md,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
-    ...theme.typography.body,
-    color: theme.colors.text,
-    ...theme.shadows.sm,
+    flex: 1,
+    fontSize: 16,
+    color: '#000000',
   },
-  statsCard: {
-    marginHorizontal: theme.spacing.lg,
+  statsBar: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#F2F2F7',
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#C6C6C8',
   },
-  statsTitle: {
-    ...theme.typography.h3,
-    color: theme.colors.text,
-    marginBottom: theme.spacing.md,
+  statsText: {
+    fontSize: 14,
+    color: '#8E8E93',
     textAlign: 'center',
   },
-  statsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statNumber: {
-    ...theme.typography.h2,
-    color: theme.colors.primary,
-    marginBottom: theme.spacing.xs,
-  },
-  statLabel: {
-    ...theme.typography.caption,
-    color: theme.colors.textSecondary,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    paddingHorizontal: theme.spacing.lg,
-    gap: theme.spacing.md,
-    marginBottom: theme.spacing.md,
-  },
+
   listContainer: {
-    paddingHorizontal: theme.spacing.lg,
     paddingBottom: 100,
   },
 
   fab: {
     position: 'absolute',
-    right: theme.spacing.lg,
-    bottom: theme.spacing.lg,
+    right: 16,
+    bottom: 34,
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: theme.colors.primary,
+    backgroundColor: '#007AFF',
     alignItems: 'center',
     justifyContent: 'center',
-    ...theme.shadows.lg,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
   },
   fabText: {
-    color: theme.colors.surface,
+    color: '#FFFFFF',
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: '300',
   },
   emptyContainer: {
     alignItems: 'center',
@@ -510,26 +459,5 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
     marginTop: theme.spacing.md,
   },
-  syncIndicator: {
-    marginTop: theme.spacing.sm,
-    alignItems: 'center',
-  },
-  syncingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.xs,
-  },
-  syncText: {
-    ...theme.typography.caption,
-    color: theme.colors.textSecondary,
-  },
-  errorContainer: {
-    padding: theme.spacing.xs,
-    borderRadius: theme.borderRadius.sm,
-    backgroundColor: theme.colors.error + '20',
-  },
-  errorText: {
-    ...theme.typography.caption,
-    color: theme.colors.error,
-  },
+
 });

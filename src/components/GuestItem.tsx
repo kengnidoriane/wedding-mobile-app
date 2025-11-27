@@ -3,7 +3,7 @@
  */
 
 import React, { memo, useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { theme } from '../styles/theme';
 import Card from './Card';
 import { LoadingButton } from './LoadingButton';
@@ -36,99 +36,156 @@ const GuestItem = memo<GuestItemProps>(function GuestItem({
   ], [guest.isPresent]);
 
   return (
-    <Card style={styles.guestCard}>
-      <View style={styles.guestHeader}>
-        <Text style={styles.guestName}>{guest.fullName}</Text>
-        <View style={statusBadgeStyle}>
-          <Text style={statusTextStyle}>
-            {guest.isPresent ? '✅ Présent' : '⏳ Absent'}
+    <View style={styles.guestCard}>
+      <View style={styles.avatar}>
+        <Text style={styles.avatarText}>{guest.fullName.charAt(0).toUpperCase()}</Text>
+      </View>
+      
+      <View style={styles.guestContent}>
+        <View style={styles.guestHeader}>
+          <Text style={styles.guestName}>{guest.fullName}</Text>
+          <Text style={styles.timestamp}>Table {guest.tableName}</Text>
+        </View>
+        
+        <View style={styles.guestFooter}>
+          <Text style={styles.guestMessage}>
+            {guest.companions > 0 ? `${guest.companions} accompagnant(s)` : 'Sans accompagnant'}
           </Text>
+          
+          <View style={styles.guestActions}>
+            <TouchableOpacity 
+              style={statusBadgeStyle}
+              onPress={() => onTogglePresence(guest.id, guest.fullName, guest.isPresent)}
+              disabled={isLoading('markPresent') || isLoading('markAbsent')}
+            >
+              <Text style={statusTextStyle}>
+                {guest.isPresent ? '✅' : '⏳'}
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.qrButton}
+              onPress={() => onShareQR(guest.id)}
+            >
+              <Text style={styles.qrButtonText}>📱</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.deleteButton}
+              onPress={() => onDelete(guest.id, guest.fullName)}
+              disabled={isLoading('deleteGuest')}
+            >
+              <Text style={styles.deleteButtonText}>🗑️</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
-
-      <View style={styles.guestInfo}>
-        <Text style={styles.infoItem}>📍 Table: {guest.tableName}</Text>
-        <Text style={styles.infoItem}>👥 Accompagnants: {guest.companions}</Text>
-      </View>
-
-      <View style={styles.guestActions}>
-        <LoadingButton
-          title={guest.isPresent ? "Marquer absent" : "Marquer présent"}
-          onPress={() => onTogglePresence(guest.id, guest.fullName, guest.isPresent)}
-          variant={guest.isPresent ? "outline" : "primary"}
-          size="sm"
-          icon={guest.isPresent ? "❌" : "✅"}
-          loading={isLoading('markPresent') || isLoading('markAbsent')}
-        />
-        <Button
-          title="Partager QR"
-          onPress={() => onShareQR(guest.id)}
-          variant="secondary"
-          size="sm"
-          icon="💬"
-        />
-        <LoadingButton
-          title="Supprimer"
-          onPress={() => onDelete(guest.id, guest.fullName)}
-          variant="outline"
-          size="sm"
-          icon="🗑️"
-          loading={isLoading('deleteGuest')}
-        />
-      </View>
-    </Card>
+    </View>
   );
 });
 
 const styles = StyleSheet.create({
   guestCard: {
-    marginBottom: theme.spacing.md,
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#E5E5EA',
+  },
+  avatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#007AFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  avatarText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  guestContent: {
+    flex: 1,
   },
   guestHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: theme.spacing.md,
+    marginBottom: 4,
   },
   guestName: {
-    ...theme.typography.h3,
-    color: theme.colors.text,
-    flex: 1,
-  },
-  statusBadge: {
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs,
-    borderRadius: theme.borderRadius.sm,
-  },
-  presentBadge: {
-    backgroundColor: theme.colors.success + '20',
-  },
-  absentBadge: {
-    backgroundColor: theme.colors.error + '20',
-  },
-  statusText: {
-    ...theme.typography.small,
+    fontSize: 16,
     fontWeight: '600',
+    color: '#000000',
   },
-  presentText: {
-    color: theme.colors.success,
+  timestamp: {
+    fontSize: 14,
+    color: '#8E8E93',
   },
-  absentText: {
-    color: theme.colors.error,
+  guestFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  guestInfo: {
-    marginBottom: theme.spacing.md,
-    gap: theme.spacing.xs,
-  },
-  infoItem: {
-    ...theme.typography.body,
-    color: theme.colors.textSecondary,
+  guestMessage: {
+    fontSize: 14,
+    color: '#8E8E93',
+    flex: 1,
   },
   guestActions: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: theme.spacing.sm,
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+  },
+  statusBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F2F2F7',
+  },
+  presentBadge: {
+    backgroundColor: '#34C759',
+  },
+  absentBadge: {
+    backgroundColor: '#FF3B30',
+  },
+  statusText: {
+    fontSize: 16,
+  },
+  presentText: {
+    color: '#FFFFFF',
+  },
+  absentText: {
+    color: '#FFFFFF',
+  },
+  qrButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#007AFF',
+  },
+  qrButtonText: {
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
+  deleteButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FF3B30',
+  },
+  deleteButtonText: {
+    fontSize: 14,
+    color: '#FFFFFF',
   },
 });
 

@@ -1,68 +1,63 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert, SafeAreaView, Dimensions } from 'react-native';
-import { getAllGuests } from '../db/database';
 import { PieChart } from 'react-native-chart-kit';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import { theme } from '../styles/theme';
 import Button from '../components/Button';
 import Card from '../components/Card';
+import { useFirebaseGuests } from '../hooks/useFirebaseGuests';
+import { LoadingSpinner } from '../components/LoadingSpinner';
 
 const screenWidth = Dimensions.get('window').width;
 
 export default function DashboardScreen() {
-  const [guests, setGuests] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { guests, loading, stats } = useFirebaseGuests();
 
-  useEffect(() => {
-    loadGuests();
-  }, []);
+  const dashboardStats = useMemo(() => {
+    const presentCount = stats?.present || 0;
+    const total = stats?.total || 0;
+    const absent = stats?.absent || 0;
+    const totalCompanions = stats?.totalCompanions || 0;
+    const presentCompanions = guests
+      .filter(g => g.isPresent)
+      .reduce((sum, guest) => sum + guest.companions, 0);
+    
+    return {
+      presentCount,
+      total,
+      absent,
+      totalCompanions,
+      presentCompanions
+    };
+  }, [guests, stats]);
 
-  const loadGuests = async () => {
-    try {
-      const data = await getAllGuests();
-      setGuests(data);
-    } catch (error) {
-      Alert.alert('Erreur', 'Impossible de charger les données');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const presentCount = guests.filter((g: any) => g.isPresent === 1).length;
-  const total = guests.length;
-  const absent = total - presentCount;
-  const totalCompanions = guests.reduce((sum, guest) => sum + guest.companions, 0);
-  const presentCompanions = guests
-    .filter((g: any) => g.isPresent === 1)
-    .reduce((sum, guest) => sum + guest.companions, 0);
-
-  const pieData = [
+  const pieData = useMemo(() => [
     {
       name: 'Présents',
-      population: presentCount,
+      population: dashboardStats.presentCount,
       color: theme.colors.success,
       legendFontColor: theme.colors.text,
       legendFontSize: 14,
     },
     {
       name: 'Absents',
-      population: absent,
+      population: dashboardStats.absent,
       color: theme.colors.error,
       legendFontColor: theme.colors.text,
       legendFontSize: 14,
     },
-  ];
+  ], [dashboardStats]);
 
   const exportData = async () => {
     try {
       const exportData = {
         summary: {
-          totalGuests: total,
-          presentGuests: presentCount,
-          absentGuests: absent,
-          totalCompanions: totalCompanions,
-          presentCompanions: presentCompanions,
+          totalGuests: dashboardStats.total,
+          presentGuests: dashboardStats.presentCount,
+          absentGuests: dashboardStats.absent,
+          totalCompanions: dashboardStats.totalCompanions,
+          presentCompanions: dashboardStats.presentCompanions,
           exportDate: new Date().toISOString(),
         },
         guests: guests.map(guest => ({
@@ -70,7 +65,7 @@ export default function DashboardScreen() {
           fullName: guest.fullName,
           tableName: guest.tableName,
           companions: guest.companions,
-          isPresent: guest.isPresent === 1,
+          isPresent: guest.isPresent,
         }))
       };
 
@@ -95,9 +90,7 @@ export default function DashboardScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Chargement du tableau de bord... ⏳</Text>
-        </View>
+        <LoadingSpinner text="Chargement du tableau de bord..." variant="fullscreen" />
       </SafeAreaView>
     );
   }
@@ -112,27 +105,27 @@ export default function DashboardScreen() {
 
         <View style={styles.statsGrid}>
           <Card style={styles.statCard}>
-            <Text style={styles.statNumber}>{total}</Text>
+            <Text style={styles.statNumber}>{dashboardStats.total}</Text>
             <Text style={styles.statLabel}>👥 Invités total</Text>
           </Card>
           
           <Card style={styles.statCard}>
-            <Text style={[styles.statNumber, { color: theme.colors.success }]}>{presentCount}</Text>
+            <Text style={[styles.statNumber, { color: theme.colors.success }]}>{dashboardStats.presentCount}</Text>
             <Text style={styles.statLabel}>✅ Présents</Text>
           </Card>
           
           <Card style={styles.statCard}>
-            <Text style={[styles.statNumber, { color: theme.colors.error }]}>{absent}</Text>
+            <Text style={[styles.statNumber, { color: theme.colors.error }]}>{dashboardStats.absent}</Text>
             <Text style={styles.statLabel}>⏳ Absents</Text>
           </Card>
           
           <Card style={styles.statCard}>
-            <Text style={styles.statNumber}>{totalCompanions}</Text>
+            <Text style={styles.statNumber}>{dashboardStats.totalCompanions}</Text>
             <Text style={styles.statLabel}>👫 Accompagnants</Text>
           </Card>
         </View>
 
-        {total > 0 && (
+        {dashboardStats.total > 0 && (
           <Card style={styles.chartCard}>
             <Text style={styles.chartTitle}>📊 Répartition des présences</Text>
             <View style={styles.chartContainer}>
@@ -156,7 +149,7 @@ export default function DashboardScreen() {
             
             <View style={styles.percentageContainer}>
               <Text style={styles.percentageText}>
-                Taux de présence: {total > 0 ? Math.round((presentCount / total) * 100) : 0}%
+                Taux de présence: {dashboardStats.total > 0 ? Math.round((dashboardStats.presentCount / dashboardStats.total) * 100) : 0}%
               </Text>
             </View>
           </Card>
@@ -167,15 +160,15 @@ export default function DashboardScreen() {
           <View style={styles.summaryList}>
             <View style={styles.summaryItem}>
               <Text style={styles.summaryLabel}>Total personnes attendues:</Text>
-              <Text style={styles.summaryValue}>{total + totalCompanions}</Text>
+              <Text style={styles.summaryValue}>{dashboardStats.total + dashboardStats.totalCompanions}</Text>
             </View>
             <View style={styles.summaryItem}>
               <Text style={styles.summaryLabel}>Personnes présentes:</Text>
-              <Text style={styles.summaryValue}>{presentCount + presentCompanions}</Text>
+              <Text style={styles.summaryValue}>{dashboardStats.presentCount + dashboardStats.presentCompanions}</Text>
             </View>
             <View style={styles.summaryItem}>
               <Text style={styles.summaryLabel}>Accompagnants présents:</Text>
-              <Text style={styles.summaryValue}>{presentCompanions}</Text>
+              <Text style={styles.summaryValue}>{dashboardStats.presentCompanions}</Text>
             </View>
           </View>
         </Card>

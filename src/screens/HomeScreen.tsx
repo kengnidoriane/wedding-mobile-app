@@ -9,12 +9,9 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 import { useFirebaseGuests } from '../hooks/useFirebaseGuests';
 
 const menuItems = [
-  { title: 'Scanner QR code', icon: '📱', screen: 'QRScanner', color: theme.colors.primary },
-  { title: 'Liste des invités', icon: '👥', screen: 'Invités', color: theme.colors.secondary },
-  { title: 'Partager QR WhatsApp', icon: '💬', screen: 'QRWhatsAppShare', color: theme.colors.success },
-  { title: 'Envoi en masse', icon: '📤', screen: 'QRBulkGenerator', color: theme.colors.success },
-  { title: 'Tableau de bord', icon: '📊', screen: 'Dashboard', color: theme.colors.primary },
-  { title: 'Paramètres', icon: '⚙️', screen: 'Paramètres', color: theme.colors.textSecondary },
+  { title: 'Liste des invités', icon: '👥', screen: 'Invités' },
+  { title: 'Scanner QR code', icon: '📱', screen: 'QRScanner' },
+  { title: 'Tableau de bord', icon: '📊', screen: 'Dashboard' },
 ];
 
 export default function HomeScreen() {
@@ -47,15 +44,15 @@ export default function HomeScreen() {
 
         <View style={styles.content}>
           {menuItems.map((item, index) => (
-            <Card key={index} style={styles.menuCard}>
-              <Button
-                title={item.title}
-                icon={item.icon}
-                onPress={() => navigation.navigate(item.screen)}
-                variant="ghost"
-                size="lg"
-              />
-            </Card>
+            <Button
+              key={index}
+              title={item.title}
+              icon={item.icon}
+              onPress={() => navigation.navigate(item.screen)}
+              variant="primary"
+              size="lg"
+              style={styles.menuButton}
+            />
           ))}
         </View>
 
@@ -91,8 +88,9 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: theme.spacing.lg,
+    gap: theme.spacing.md,
   },
-  menuCard: {
+  menuButton: {
     marginBottom: theme.spacing.md,
   },
   footer: {
