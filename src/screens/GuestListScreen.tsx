@@ -13,8 +13,10 @@ import GuestItem from '../components/GuestItem';
 import ValidatedTextInput from '../components/ValidatedTextInput';
 import { useFirebaseGuests } from '../hooks/useFirebaseGuests';
 import { useErrorHandler } from '../hooks/useErrorHandler';
+import { useGuestFilters } from '../hooks/useGuestFilters';
 import { validationService } from '../services/validationService';
 import { CreateGuestData, SyncStatus } from '../types/guest';
+import FilterModal from '../components/FilterModal';
 
 export default function GuestListScreen({ navigation }: any) {
   // Hook Firebase pour la gestion des invités
@@ -38,9 +40,23 @@ export default function GuestListScreen({ navigation }: any) {
   // Gestionnaire d'erreurs local pour les opérations UI
   const { error: localError, showError: showLocalError, clearError: clearLocalError } = useErrorHandler();
 
+  // Filtres et recherche avancée
+  const {
+    filters,
+    setFilters,
+    searchQuery,
+    setSearchQuery,
+    filteredGuests,
+    availableTables,
+    activeFilterCount,
+    hasActiveFilters,
+    resetFilters,
+    filterSummary
+  } = useGuestFilters(guests);
+
   // État local pour l'interface
-  const [search, setSearch] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [newFullName, setNewFullName] = useState('');
   const [newTableName, setNewTableName] = useState('');
   const [newCompanions, setNewCompanions] = useState('');
@@ -190,15 +206,7 @@ export default function GuestListScreen({ navigation }: any) {
     }
   };
 
-  const filteredGuests = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return guests;
-    return guests.filter((g) =>
-      g.fullName.toLowerCase().includes(q) || 
-      g.tableName.toLowerCase().includes(q) ||
-      g.companions.toString().includes(q)
-    );
-  }, [search, guests]);
+
 
   const statsData = useMemo(() => ({
     presentCount: stats?.present || 0,
@@ -245,17 +253,42 @@ export default function GuestListScreen({ navigation }: any) {
         <View style={styles.searchBar}>
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Rechercher"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Rechercher par nom ou table"
             style={styles.searchInput}
             placeholderTextColor="#8E8E93"
+            returnKeyType="search"
           />
+          <TouchableOpacity 
+            style={styles.filterButton}
+            onPress={() => setFilterModalVisible(true)}
+          >
+            <Text style={styles.filterIcon}>⚙️</Text>
+            {activeFilterCount > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
       </View>
 
+      {hasActiveFilters && (
+        <View style={styles.activeFiltersBar}>
+          <Text style={styles.activeFiltersText} numberOfLines={1}>
+            {filterSummary}
+          </Text>
+          <TouchableOpacity onPress={resetFilters}>
+            <Text style={styles.clearFiltersText}>Effacer</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <View style={styles.statsBar}>
-        <Text style={styles.statsText}>✅ {statsData.presentCount} présents • ❌ {statsData.absentCount} absents</Text>
+        <Text style={styles.statsText}>
+          {filteredGuests.length} invité(s) • ✅ {statsData.presentCount} présents • ❌ {statsData.absentCount} absents
+        </Text>
       </View>
 
       <FlatList
@@ -273,8 +306,20 @@ export default function GuestListScreen({ navigation }: any) {
             />
           ) : (
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>Aucun invité trouvé</Text>
-              <Text style={styles.emptySubtext}>Ajoutez des invités ou importez un fichier CSV</Text>
+              <Text style={styles.emptyText}>
+                {hasActiveFilters ? 'Aucun résultat' : 'Aucun invité trouvé'}
+              </Text>
+              <Text style={styles.emptySubtext}>
+                {hasActiveFilters 
+                  ? 'Essayez de modifier vos filtres de recherche'
+                  : 'Ajoutez des invités ou importez un fichier CSV'
+                }
+              </Text>
+              {hasActiveFilters && (
+                <TouchableOpacity style={styles.clearFiltersButton} onPress={resetFilters}>
+                  <Text style={styles.clearFiltersButtonText}>Effacer les filtres</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )
         }
@@ -333,6 +378,14 @@ export default function GuestListScreen({ navigation }: any) {
           </Card>
         </View>
       </Modal>
+
+      <FilterModal
+        visible={filterModalVisible}
+        onClose={() => setFilterModalVisible(false)}
+        onApply={setFilters}
+        currentFilters={filters}
+        availableTables={availableTables}
+      />
     </SafeAreaView>
   );
 }
@@ -385,6 +438,64 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#000000',
   },
+  filterButton: {
+    position: 'relative',
+    marginLeft: 8,
+    padding: 4,
+  },
+  filterIcon: {
+    fontSize: 16,
+    color: '#007AFF',
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#FF3B30',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterBadgeText: {
+    fontSize: 10,
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+  },
+  activeFiltersBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#E3F2FD',
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#C6C6C8',
+  },
+  activeFiltersText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1976D2',
+    fontWeight: '500',
+  },
+  clearFiltersText: {
+    fontSize: 14,
+    color: '#1976D2',
+    fontWeight: '600',
+  },
+  clearFiltersButton: {
+    marginTop: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    backgroundColor: '#007AFF',
+    borderRadius: 8,
+  },
+  clearFiltersButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   statsBar: {
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -393,7 +504,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#C6C6C8',
   },
   statsText: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#8E8E93',
     textAlign: 'center',
   },
