@@ -9,6 +9,10 @@ import Card from './Card';
 import { LoadingButton } from './LoadingButton';
 import Button from './Button';
 import { Guest } from '../types/guest';
+import { CheckIcon } from './icons/CheckIcon';
+import { ClockIcon } from './icons/ClockIcon';
+import { QRIcon } from './icons/QRIcon';
+import { TrashIcon } from './icons/TrashIcon';
 
 interface GuestItemProps {
   guest: Guest;
@@ -30,10 +34,7 @@ const GuestItem = memo<GuestItemProps>(function GuestItem({
     guest.isPresent ? styles.presentBadge : styles.absentBadge
   ], [guest.isPresent]);
 
-  const statusTextStyle = useMemo(() => [
-    styles.statusText,
-    guest.isPresent ? styles.presentText : styles.absentText
-  ], [guest.isPresent]);
+
 
   return (
     <View style={styles.guestCard}>
@@ -58,16 +59,18 @@ const GuestItem = memo<GuestItemProps>(function GuestItem({
               onPress={() => onTogglePresence(guest.id, guest.fullName, guest.isPresent)}
               disabled={isLoading('markPresent') || isLoading('markAbsent')}
             >
-              <Text style={statusTextStyle}>
-                {guest.isPresent ? '✅' : '⏳'}
-              </Text>
+              {guest.isPresent ? (
+                <CheckIcon size={16} color="#FFFFFF" />
+              ) : (
+                <ClockIcon size={16} color="#FFFFFF" />
+              )}
             </TouchableOpacity>
             
             <TouchableOpacity 
               style={styles.qrButton}
               onPress={() => onShareQR(guest.id)}
             >
-              <Text style={styles.qrButtonText}>📱</Text>
+              <QRIcon size={14} color="#FFFFFF" />
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -75,7 +78,7 @@ const GuestItem = memo<GuestItemProps>(function GuestItem({
               onPress={() => onDelete(guest.id, guest.fullName)}
               disabled={isLoading('deleteGuest')}
             >
-              <Text style={styles.deleteButtonText}>🗑️</Text>
+              <TrashIcon size={14} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         </View>
@@ -154,15 +157,6 @@ const styles = StyleSheet.create({
   absentBadge: {
     backgroundColor: '#FF3B30',
   },
-  statusText: {
-    fontSize: 16,
-  },
-  presentText: {
-    color: '#FFFFFF',
-  },
-  absentText: {
-    color: '#FFFFFF',
-  },
   qrButton: {
     width: 32,
     height: 32,
@@ -171,10 +165,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#007AFF',
   },
-  qrButtonText: {
-    fontSize: 14,
-    color: '#FFFFFF',
-  },
   deleteButton: {
     width: 32,
     height: 32,
@@ -182,10 +172,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#FF3B30',
-  },
-  deleteButtonText: {
-    fontSize: 14,
-    color: '#FFFFFF',
   },
 });
 

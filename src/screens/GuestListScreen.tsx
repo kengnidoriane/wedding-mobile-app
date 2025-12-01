@@ -19,6 +19,7 @@ import { CreateGuestData, SyncStatus } from '../types/guest';
 import FilterModal from '../components/FilterModal';
 import ExportModal from '../components/ExportModal';
 import { pdfExportService } from '../services/pdfExportService';
+import { FilterIcon } from '../components/FilterIcon';
 
 export default function GuestListScreen({ navigation }: any) {
   // Hook Firebase pour la gestion des invités
@@ -297,7 +298,11 @@ export default function GuestListScreen({ navigation }: any) {
             style={styles.filterButton}
             onPress={() => setFilterModalVisible(true)}
           >
-            <Text style={styles.filterIcon}>⚙️</Text>
+            <FilterIcon 
+              size={20} 
+              color="#007AFF" 
+              hasActiveFilters={activeFilterCount > 0}
+            />
             {activeFilterCount > 0 && (
               <View style={styles.filterBadge}>
                 <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
@@ -512,22 +517,19 @@ const styles = StyleSheet.create({
   filterButton: {
     position: 'relative',
     marginLeft: 8,
-    padding: 4,
-  },
-  filterIcon: {
-    fontSize: 16,
-    color: '#007AFF',
   },
   filterBadge: {
     position: 'absolute',
-    top: -2,
-    right: -2,
+    top: -4,
+    right: -4,
     backgroundColor: '#FF3B30',
-    borderRadius: 8,
-    minWidth: 16,
-    height: 16,
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
   },
   filterBadgeText: {
     fontSize: 10,
