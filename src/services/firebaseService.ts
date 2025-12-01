@@ -46,13 +46,16 @@ class FirebaseService {
    * Initialise le service et authentifie l'utilisateur
    */
   async initialize(): Promise<void> {
+    console.log('🔥 FirebaseService: initialize() called');
     try {
       // Authentification anonyme pour simplifier
+      console.log('🔥 FirebaseService: Calling signInAnonymously...');
       const userCredential = await signInAnonymously(auth);
       this.currentUser = userCredential.user;
       console.log('🔥 Firebase service initialized with user:', this.currentUser.uid);
     } catch (error) {
       console.error('❌ Firebase service initialization failed:', error);
+      console.error('❌ Error details:', error);
       throw new Error('Impossible de se connecter au service de synchronisation');
     }
   }
@@ -61,7 +64,9 @@ class FirebaseService {
    * Vérifie si l'utilisateur est authentifié
    */
   private ensureAuthenticated(): void {
+    console.log('🔥 FirebaseService: ensureAuthenticated() - currentUser:', this.currentUser?.uid || 'NULL');
     if (!this.currentUser) {
+      console.error('❌ FirebaseService: User not authenticated! Did you call initialize()?');
       throw new Error('Utilisateur non authentifié. Veuillez redémarrer l\'application.');
     }
   }
@@ -211,22 +216,28 @@ class FirebaseService {
    * Marque un invité comme présent
    */
   async markGuestPresent(guestId: string): Promise<void> {
+    console.log('🔥 FirebaseService: markGuestPresent called for:', guestId);
     this.ensureAuthenticated();
+    console.log('🔥 FirebaseService: Authentication OK, user:', this.currentUser?.uid);
 
     // Validation de l'ID
     const idValidation = validationService.validateGuestId(guestId);
     if (!idValidation.isValid) {
+      console.error('❌ FirebaseService: Invalid guest ID:', guestId);
       throw new Error(validationService.formatValidationErrors(idValidation.errors));
     }
+    console.log('🔥 FirebaseService: Validation OK');
 
     try {
       const guestRef = doc(db, COLLECTIONS.GUESTS, guestId);
+      console.log('🔥 FirebaseService: Updating document in Firestore...');
       
       await updateDoc(guestRef, {
         isPresent: true,
         updatedAt: serverTimestamp(),
         updatedBy: this.currentUser!.uid
       });
+      console.log('🔥 FirebaseService: Document updated successfully');
 
       // Log de l'action
       await this.logAction(UserAction.MARK_PRESENT, guestId, { isPresent: false }, { isPresent: true });

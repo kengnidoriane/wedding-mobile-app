@@ -87,7 +87,9 @@ export default function QRScannerScreen() {
           );
         } else {
           // Marquer automatiquement comme présent
+          console.log('📱 QR Scanner: Calling markPresent for guest:', guest.fullName, 'ID:', guest.id);
           await markPresent(guest.id);
+          console.log('📱 QR Scanner: markPresent completed');
           
           // Calculer le nombre total de personnes (invité + accompagnants)
           const totalPersons = 1 + guest.companions;

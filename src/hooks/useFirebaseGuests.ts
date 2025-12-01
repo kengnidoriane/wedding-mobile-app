@@ -47,9 +47,6 @@ interface UseFirebaseGuestsReturn {
   pendingActionsCount: number;
   syncPendingActions: () => Promise<void>;
   
-  // Export
-  exportToPDF: (options: ExportOptions) => Promise<string>;
-  
   // Actions
   addGuest: (guestData: CreateGuestData) => Promise<void>;
   updateGuest: (guestId: string, updateData: UpdateGuestData) => Promise<void>;
@@ -63,7 +60,6 @@ interface UseFirebaseGuestsReturn {
   // Utilitaires
   findGuestById: (id: string) => Guest | undefined;
   findGuestsByTable: (tableName: string) => Guest[];
-  clearError: () => void;
 }
 
 /**
@@ -146,7 +142,10 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
         await notificationService.initialize();
         setPendingActionsCount(offlineService.getPendingActionsCount());
 
-        if (isOnline) {
+        // Initialise Firebase sauf si explicitement offline
+        if (isOnline !== false) {
+          console.log('🌐 Network status: ONLINE or UNKNOWN - Initializing Firebase');
+          console.log('🌐 isOnline value:', isOnline);
           // Online mode: initialize Firebase and sync
           await firebaseService.initialize();
 
@@ -154,6 +153,7 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
 
           // Start listening to guests
           const unsubscribe = firebaseService.subscribeToGuests(async (updatedGuests) => {
+            console.log('🔄 Firebase listener callback - Received guests:', updatedGuests.length);
             if (!mounted) return;
             
             setGuests(updatedGuests);
@@ -169,12 +169,17 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
           });
 
           unsubscribeRef.current = unsubscribe;
-        } else {
+        } else if (isOnline === false) {
+          console.log('🌐 Network status: OFFLINE - Loading cached data');
           // Offline mode: load cached data
           const optimisticGuests = await offlineService.getOptimisticGuests();
           setGuests(optimisticGuests);
           setLoading(false);
           updateSyncState(SyncStatus.ERROR, 'Mode hors-ligne');
+        } else {
+          console.log('🌐 Network status: UNKNOWN - Waiting for network detection');
+          // Network status unknown, wait a bit
+          setLoading(false);
         }
 
       } catch (error) {
@@ -282,13 +287,19 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
    * Marque un invité comme présent
    */
   const markPresent = useCallback(async (guestId: string) => {
+    console.log('🔵 markPresent called for guestId:', guestId);
+    console.log('🌐 isOnline:', isOnline);
+    
     await withLoading('markPresent', async () => {
       try {
         const guest = guests.find(g => g.id === guestId);
+        console.log('👤 Guest found:', guest ? guest.fullName : 'NOT FOUND');
         
-        if (isOnline) {
+        if (isOnline === true) {
+          console.log('✅ Online mode - calling Firebase');
           updateSyncState(SyncStatus.SYNCING);
           await firebaseService.markGuestPresent(guestId);
+          console.log('✅ Firebase markGuestPresent completed');
           updateSyncState(SyncStatus.SUCCESS);
           
           // Send notification for guest arrival
@@ -296,6 +307,7 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
             await notificationService.notifyGuestArrival({ ...guest, isPresent: true });
           }
         } else {
+          console.log('⚠️ Offline mode (or network unknown) - queuing action');
           // Offline: queue action
           await offlineService.addPendingAction({
             type: 'MARK_PRESENT',
@@ -305,6 +317,7 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
           const optimisticGuests = await offlineService.getOptimisticGuests();
           setGuests(optimisticGuests);
           setPendingActionsCount(offlineService.getPendingActionsCount());
+          console.log('📝 Action queued, pending count:', offlineService.getPendingActionsCount());
           
           // Send notification for offline arrival
           if (guest && !guest.isPresent) {
@@ -312,6 +325,7 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
           }
         }
       } catch (error) {
+        console.error('❌ Error in markPresent:', error);
         handleError(error, 'marking guest present');
         throw error;
       }
@@ -407,7 +421,9 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
   }, [clearErrorHandler]);
 
   // Calculer les statistiques automatiquement quand les invités changent
+  // Calculer les statistiques automatiquement quand les invités changent
   useEffect(() => {
+    console.log('📊 Calculating stats for', guests.length, 'guests');
     if (guests.length > 0) {
       const calculatedStats: GuestStats = {
         total: guests.length,
@@ -416,7 +432,11 @@ export const useFirebaseGuests = (): UseFirebaseGuestsReturn => {
         totalCompanions: guests.reduce((sum, g) => sum + g.companions, 0),
         presentCompanions: guests.filter(g => g.isPresent).reduce((sum, g) => sum + g.companions, 0)
       };
+      console.log('📊 Stats calculated:', calculatedStats.present, '/', calculatedStats.total, 'present');
       setStats(calculatedStats);
+    } else {
+      console.log('📊 No guests, stats set to null');
+      setStats(null);
     }
   }, [guests]);
 

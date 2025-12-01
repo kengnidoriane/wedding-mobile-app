@@ -21,10 +21,11 @@ class NotificationService {
   };
 
   async initialize() {
-    // Configure notification behavior
+    // Configure notification behavior (updated API)
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
-        shouldShowAlert: true,
+        shouldShowBanner: true,  // Remplace shouldShowAlert
+        shouldShowList: true,     // Affiche dans la liste des notifications
         shouldPlaySound: this.settings.sound,
         shouldSetBadge: false,
       }),

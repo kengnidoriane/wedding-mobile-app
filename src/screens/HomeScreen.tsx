@@ -18,6 +18,9 @@ export default function HomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const { loading, stats } = useFirebaseGuests();
 
+  // Log pour vérifier les mises à jour
+  console.log('🏠 HomeScreen: stats updated -', stats ? `${stats.present}/${stats.total}` : 'NULL');
+
   const statsText = useMemo(() => 
     stats ? `${stats.present}/${stats.total} invités présents` : '',
     [stats]
@@ -92,6 +95,7 @@ const styles = StyleSheet.create({
   },
   menuButton: {
     marginBottom: theme.spacing.md,
+    flex: 0,
   },
   footer: {
     alignItems: 'center',

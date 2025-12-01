@@ -46,14 +46,25 @@ let app: FirebaseApp;
 let db: Firestore;
 let auth: Auth;
 
+console.log('🔥 Starting Firebase initialization...');
 try {
   // Valider la configuration avant l'initialisation
+  console.log('🔥 Validating Firebase config...');
   validateFirebaseConfig(firebaseConfig);
+  console.log('🔥 Config validation passed');
   
   // Initialiser Firebase
+  console.log('🔥 Initializing Firebase app...');
   app = initializeApp(firebaseConfig);
+  console.log('🔥 Firebase app initialized');
+  
+  console.log('🔥 Initializing Firestore...');
   db = getFirestore(app);
+  console.log('🔥 Firestore initialized');
+  
+  console.log('🔥 Initializing Auth...');
   auth = getAuth(app);
+  console.log('🔥 Auth initialized:', auth ? 'SUCCESS' : 'FAILED');
 
   // Configuration pour le développement (émulateur)
   if (__DEV__ && Constants.expoConfig?.extra?.useFirebaseEmulator) {
@@ -68,6 +79,7 @@ try {
   console.log('🔥 Firebase initialized successfully');
 } catch (error) {
   console.error('❌ Firebase initialization failed:', error);
+  console.error('❌ Error details:', error);
   throw error;
 }
 
