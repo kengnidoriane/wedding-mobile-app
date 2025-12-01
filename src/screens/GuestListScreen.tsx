@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useCallback } from 'react';
-import { View, Text, FlatList, StyleSheet, TextInput, TouchableOpacity, RefreshControl, Modal, Alert, SafeAreaView, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TextInput, TouchableOpacity, RefreshControl, Modal, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import Papa from 'papaparse';
@@ -15,7 +16,7 @@ import { useFirebaseGuests } from '../hooks/useFirebaseGuests';
 import { useErrorHandler } from '../hooks/useErrorHandler';
 import { useGuestFilters } from '../hooks/useGuestFilters';
 import { validationService } from '../services/validationService';
-import { CreateGuestData, SyncStatus } from '../types/guest';
+import { CreateGuestData } from '../types/guest';
 import FilterModal from '../components/FilterModal';
 import ExportModal from '../components/ExportModal';
 import { pdfExportService } from '../services/pdfExportService';
@@ -26,21 +27,15 @@ export default function GuestListScreen({ navigation }: any) {
   const {
     guests,
     stats,
-    syncState,
     loading,
-    error,
     addGuest,
     deleteGuest: deleteGuestFirebase,
     markPresent,
     markAbsent,
     importGuests,
-    clearError,
-    showError,
-    showAlert,
     isLoading,
     isOnline,
     pendingActionsCount,
-    syncPendingActions,
     exportToPDF
   } = useFirebaseGuests();
   
@@ -69,6 +64,8 @@ export default function GuestListScreen({ navigation }: any) {
   const [newTableName, setNewTableName] = useState('');
   const [newCompanions, setNewCompanions] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  
+
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -113,6 +110,8 @@ export default function GuestListScreen({ navigation }: any) {
     }
   };
 
+
+
   const handleDeleteGuest = async (id: string, name: string) => {
     Alert.alert(
       'Confirmer la suppression',
@@ -126,8 +125,7 @@ export default function GuestListScreen({ navigation }: any) {
             try {
               await deleteGuestFirebase(id);
             } catch (error) {
-              // L'erreur est déjà gérée par le hook
-              console.error('Error in handleDeleteGuest:', error);
+              console.error('Error deleting guest:', error);
             }
           }
         }
@@ -136,29 +134,15 @@ export default function GuestListScreen({ navigation }: any) {
   };
 
   const toggleGuestPresence = async (id: string, name: string, isCurrentlyPresent: boolean) => {
-    const action = isCurrentlyPresent ? 'marquer comme absent' : 'marquer comme présent';
-    Alert.alert(
-      'Changer le statut',
-      `Voulez-vous ${action} ${name} ?`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        { 
-          text: 'Confirmer',
-          onPress: async () => {
-            try {
-              if (!isCurrentlyPresent) {
-                await markPresent(id);
-              } else {
-                await markAbsent(id);
-              }
-            } catch (error) {
-              // L'erreur est déjà gérée par le hook
-              console.error('Error in toggleGuestPresence:', error);
-            }
-          }
-        }
-      ]
-    );
+    try {
+      if (!isCurrentlyPresent) {
+        await markPresent(id);
+      } else {
+        await markAbsent(id);
+      }
+    } catch (error) {
+      console.error('Error in toggleGuestPresence:', error);
+    }
   };
 
   const handleImportCSV = async () => {

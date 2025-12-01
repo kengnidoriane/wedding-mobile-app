@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, memo, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ActivityIndicator, Alert, ScrollView, Animated } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Alert, ScrollView, Animated } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, RouteProp } from '@react-navigation/native';
 import ViewShot from 'react-native-view-shot';
 import QRCode from 'react-native-qrcode-svg';
@@ -34,7 +35,7 @@ GuestInfoDisplay.displayName = 'GuestInfoDisplay';
 const QRCodeDisplay = memo(({ qrData, guestName, captureRef }: { 
   qrData: string; 
   guestName: string;
-  captureRef: React.RefObject<ViewShot>;
+  captureRef: React.RefObject<ViewShot | null>;
 }) => (
   <ViewShot
     ref={captureRef}
@@ -189,16 +190,13 @@ export default function QRWhatsAppShareScreen() {
   const handleError = useCallback((error: any, context: string, retryAction?: () => void) => {
     console.error(`Error in ${context}:`, error);
 
-    if (error instanceof qrSharingService.QRSharingError) {
-      const buttons = retryAction ? [
-        { text: 'Réessayer', onPress: retryAction, style: 'default' as const },
-        { text: 'Annuler', style: 'cancel' as const }
-      ] : [{ text: 'OK', style: 'default' as const }];
+    const buttons = retryAction ? [
+      { text: 'Réessayer', onPress: retryAction, style: 'default' as const },
+      { text: 'Annuler', style: 'cancel' as const }
+    ] : [{ text: 'OK', style: 'default' as const }];
 
-      Alert.alert('Erreur', error.message, buttons);
-    } else {
-      Alert.alert('Erreur', 'Une erreur inattendue est survenue. Veuillez réessayer.');
-    }
+    const errorMessage = error?.message || 'Une erreur inattendue est survenue. Veuillez réessayer.';
+    Alert.alert('Erreur', errorMessage, buttons);
   }, []);
 
   // Share via WhatsApp
@@ -412,7 +410,6 @@ export default function QRWhatsAppShareScreen() {
               title="📱 Partager WhatsApp"
               onPress={handleShareWhatsApp}
               disabled={sharing || saving || sharingOther}
-              style={styles.actionButton}
             />
             
             <Button
@@ -420,7 +417,6 @@ export default function QRWhatsAppShareScreen() {
               onPress={handleShareOther}
               disabled={sharing || saving || sharingOther}
               variant="outline"
-              style={styles.actionButton}
             />
             
             <Button
@@ -428,7 +424,6 @@ export default function QRWhatsAppShareScreen() {
               onPress={handleSaveToGallery}
               disabled={sharing || saving || sharingOther}
               variant="outline"
-              style={styles.actionButton}
             />
           </View>
         </Card>
@@ -526,9 +521,6 @@ const styles = StyleSheet.create({
   },
   actionContainer: {
     gap: theme.spacing.md,
-  },
-  actionButton: {
-    marginBottom: theme.spacing.sm,
   },
   centerContainer: {
     flex: 1,
