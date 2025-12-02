@@ -12,6 +12,7 @@ expo-env.d.ts
 # Native
 .kotlin/
 .idea/
+.vscode/s
 .gradle/
 .kiro/
 .cxx/
