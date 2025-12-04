@@ -20,6 +20,10 @@ interface GuestItemProps {
   onDelete: (id: string, name: string) => void;
   onShareQR: (id: string) => void;
   isLoading: (key?: string) => boolean;
+  selectionMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelection?: (id: string) => void;
+  onLongPress?: (id: string) => void;
 }
 
 const GuestItem = memo<GuestItemProps>(function GuestItem({
@@ -27,17 +31,48 @@ const GuestItem = memo<GuestItemProps>(function GuestItem({
   onTogglePresence,
   onDelete,
   onShareQR,
-  isLoading
+  isLoading,
+  selectionMode = false,
+  isSelected = false,
+  onToggleSelection,
+  onLongPress
 }) {
   const statusBadgeStyle = useMemo(() => [
     styles.statusBadge,
     guest.isPresent ? styles.presentBadge : styles.absentBadge
   ], [guest.isPresent]);
 
+  const cardStyle = useMemo(() => [
+    styles.guestCard,
+    isSelected && styles.selectedCard
+  ], [isSelected]);
 
+  const handlePress = () => {
+    if (selectionMode) {
+      onToggleSelection?.(guest.id);
+    }
+  };
+
+  const handleLongPress = () => {
+    onLongPress?.(guest.id);
+  };
 
   return (
-    <View style={styles.guestCard}>
+    <TouchableOpacity 
+      style={cardStyle}
+      onPress={handlePress}
+      onLongPress={handleLongPress}
+      activeOpacity={selectionMode ? 0.7 : 1}
+      delayLongPress={500}
+    >
+      {selectionMode && (
+        <View style={styles.checkbox}>
+          <View style={[styles.checkboxInner, isSelected && styles.checkboxSelected]}>
+            {isSelected && <CheckIcon size={16} color="#FFFFFF" />}
+          </View>
+        </View>
+      )}
+      
       <View style={styles.avatar}>
         <Text style={styles.avatarText}>{guest.fullName.charAt(0).toUpperCase()}</Text>
       </View>
@@ -83,7 +118,7 @@ const GuestItem = memo<GuestItemProps>(function GuestItem({
           </View>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 });
 
@@ -95,6 +130,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderBottomWidth: 0.5,
     borderBottomColor: '#E5E5EA',
+  },
+  selectedCard: {
+    backgroundColor: '#E3F2FD',
+  },
+  checkbox: {
+    marginRight: 12,
+    justifyContent: 'center',
+  },
+  checkboxInner: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#C6C6C8',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxSelected: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
   },
   avatar: {
     width: 50,

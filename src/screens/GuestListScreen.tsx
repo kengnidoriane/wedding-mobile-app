@@ -21,6 +21,7 @@ import FilterModal from '../components/FilterModal';
 import ExportModal from '../components/ExportModal';
 import { pdfExportService } from '../services/pdfExportService';
 import { FilterIcon } from '../components/FilterIcon';
+import { TrashIcon } from '../components/icons/TrashIcon';
 
 export default function GuestListScreen({ navigation }: any) {
   // Hook Firebase pour la gestion des invités
@@ -65,6 +66,10 @@ export default function GuestListScreen({ navigation }: any) {
   const [newCompanions, setNewCompanions] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   
+  // État pour la sélection multiple
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedGuests, setSelectedGuests] = useState<Set<string>>(new Set());
+  
 
 
   const onRefresh = async () => {
@@ -90,6 +95,16 @@ export default function GuestListScreen({ navigation }: any) {
       tableName: newTableName.trim(),
       companions: parseInt(newCompanions, 10) || 0
     };
+
+    // Vérifier les doublons
+    const isDuplicate = guests.some(
+      guest => guest.fullName.toLowerCase() === guestData.fullName.toLowerCase()
+    );
+    
+    if (isDuplicate) {
+      showLocalError(`Un invité avec le nom "${guestData.fullName}" existe déjà`, 'doublon détecté');
+      return;
+    }
 
     // Validation côté client avant l'envoi
     const validation = validationService.validateCreateGuest(guestData);
@@ -133,16 +148,98 @@ export default function GuestListScreen({ navigation }: any) {
     );
   };
 
-  const toggleGuestPresence = async (id: string, name: string, isCurrentlyPresent: boolean) => {
-    try {
-      if (!isCurrentlyPresent) {
-        await markPresent(id);
-      } else {
-        await markAbsent(id);
-      }
-    } catch (error) {
-      console.error('Error in toggleGuestPresence:', error);
+  const toggleSelectionMode = () => {
+    setSelectionMode(!selectionMode);
+    setSelectedGuests(new Set());
+  };
+
+  const handleLongPress = (guestId: string) => {
+    if (!selectionMode) {
+      // Activer le mode sélection et sélectionner cet invité
+      setSelectionMode(true);
+      setSelectedGuests(new Set([guestId]));
     }
+  };
+
+  const toggleGuestSelection = (guestId: string) => {
+    const newSelection = new Set(selectedGuests);
+    if (newSelection.has(guestId)) {
+      newSelection.delete(guestId);
+    } else {
+      newSelection.add(guestId);
+    }
+    setSelectedGuests(newSelection);
+    
+    // Si plus aucune sélection, quitter le mode sélection
+    if (newSelection.size === 0) {
+      setSelectionMode(false);
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedGuests.size === 0) return;
+
+    Alert.alert(
+      'Confirmer la suppression',
+      `Voulez-vous vraiment supprimer ${selectedGuests.size} invité(s) ?`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const deletePromises = Array.from(selectedGuests).map(id => 
+                deleteGuestFirebase(id)
+              );
+              await Promise.all(deletePromises);
+              setSelectedGuests(new Set());
+              setSelectionMode(false);
+            } catch (error) {
+              console.error('Error deleting selected guests:', error);
+              showLocalError('Erreur lors de la suppression des invités', 'suppression multiple');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const selectAll = () => {
+    const allIds = new Set(filteredGuests.map(g => g.id));
+    setSelectedGuests(allIds);
+  };
+
+  const deselectAll = () => {
+    setSelectedGuests(new Set());
+  };
+
+  const toggleGuestPresence = async (id: string, name: string, isCurrentlyPresent: boolean) => {
+    const action = isCurrentlyPresent ? 'absent' : 'présent';
+    const emoji = isCurrentlyPresent ? '⏳' : '✅';
+    
+    Alert.alert(
+      'Confirmer le changement de statut',
+      `Voulez-vous marquer ${name} comme ${action} ?`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: `${emoji} Marquer ${action}`,
+          style: 'default',
+          onPress: async () => {
+            try {
+              if (!isCurrentlyPresent) {
+                await markPresent(id);
+              } else {
+                await markAbsent(id);
+              }
+            } catch (error) {
+              console.error('Error in toggleGuestPresence:', error);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const handleImportCSV = async () => {
@@ -154,13 +251,34 @@ export default function GuestListScreen({ navigation }: any) {
 
       if (!result.canceled && result.assets[0]) {
         const fileUri = result.assets[0].uri;
-        const file = new File(fileUri);
-        const fileContent = await file.text();
+        
+        // Lire le contenu du fichier
+        let fileContent: string;
+        try {
+          const file = new File(fileUri);
+          fileContent = await file.text();
+        } catch (fileError) {
+          console.error('Error reading file with new API:', fileError);
+          showLocalError('Impossible de lire le fichier. Vérifiez que le fichier n\'est pas corrompu.', 'lecture du fichier');
+          return;
+        }
+        
+        if (!fileContent || fileContent.trim() === '') {
+          showLocalError('Le fichier est vide', 'lecture du fichier');
+          return;
+        }
         
         Papa.parse(fileContent, {
           header: true,
           skipEmptyLines: true,
           complete: async (results: any) => {
+            console.log('CSV parsing complete. Rows found:', results.data.length);
+            console.log('First row sample:', results.data[0]);
+            
+            if (results.errors && results.errors.length > 0) {
+              console.error('CSV parsing errors:', results.errors);
+            }
+            
             const rawGuests: CreateGuestData[] = [];
             
             for (const row of results.data) {
@@ -177,6 +295,8 @@ export default function GuestListScreen({ navigation }: any) {
                 });
               }
             }
+            
+            console.log('Valid guests extracted:', rawGuests.length);
             
             // Validation en lot
             const { valid, invalid } = validationService.validateBatch(rawGuests);
@@ -225,8 +345,12 @@ export default function GuestListScreen({ navigation }: any) {
       onDelete={handleDeleteGuest}
       onShareQR={handleShareQR}
       isLoading={isLoading}
+      selectionMode={selectionMode}
+      isSelected={selectedGuests.has(item.id)}
+      onToggleSelection={toggleGuestSelection}
+      onLongPress={handleLongPress}
     />
-  ), [toggleGuestPresence, handleDeleteGuest, handleShareQR, isLoading]);
+  ), [toggleGuestPresence, handleDeleteGuest, handleShareQR, isLoading, selectionMode, selectedGuests, toggleGuestSelection, handleLongPress]);
 
   const keyExtractor = useCallback((item: any) => item.id.toString(), []);
 
@@ -265,12 +389,26 @@ export default function GuestListScreen({ navigation }: any) {
               <Text style={styles.pendingText}>{pendingActionsCount}</Text>
             </View>
           )}
-          <TouchableOpacity onPress={() => setExportModalVisible(true)}>
-            <Text style={styles.headerAction}>Export</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleImportCSV}>
-            <Text style={styles.headerAction}>Import</Text>
-          </TouchableOpacity>
+          {!selectionMode ? (
+            <>
+              <TouchableOpacity onPress={() => setExportModalVisible(true)}>
+                <Text style={styles.headerAction}>Export</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleImportCSV}>
+                <Text style={styles.headerAction}>Import</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <Text style={styles.selectionCount}>{selectedGuests.size} sélectionné(s)</Text>
+              <TouchableOpacity onPress={selectAll}>
+                <Text style={styles.headerAction}>Tout</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={toggleSelectionMode}>
+                <Text style={styles.headerAction}>Annuler</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </View>
 
@@ -354,9 +492,16 @@ export default function GuestListScreen({ navigation }: any) {
         }
       />
 
-      <TouchableOpacity style={styles.fab} onPress={handleAddGuest} activeOpacity={0.8}>
-        <Text style={styles.fabText}>+</Text>
-      </TouchableOpacity>
+      {!selectionMode ? (
+        <TouchableOpacity style={styles.fab} onPress={handleAddGuest} activeOpacity={0.8}>
+          <Text style={styles.fabText}>+</Text>
+        </TouchableOpacity>
+      ) : selectedGuests.size > 0 && (
+        <TouchableOpacity style={styles.fabDelete} onPress={handleDeleteSelected} activeOpacity={0.8}>
+          <TrashIcon size={24} color="#FFFFFF" />
+          <Text style={styles.fabDeleteText}>{selectedGuests.size}</Text>
+        </TouchableOpacity>
+      )}
 
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={closeAddModal}>
         <View style={styles.modalOverlay}>
@@ -457,6 +602,11 @@ const styles = StyleSheet.create({
     fontSize: 17,
     color: '#007AFF',
     fontWeight: '400',
+  },
+  selectionCount: {
+    fontSize: 17,
+    color: '#000000',
+    fontWeight: '600',
   },
   offlineIndicator: {
     backgroundColor: '#FF9500',
@@ -597,6 +747,28 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 24,
     fontWeight: '300',
+  },
+  fabDelete: {
+    position: 'absolute',
+    right: 16,
+    bottom: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 20,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#FF3B30',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  fabDeleteText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
   },
   emptyContainer: {
     alignItems: 'center',
