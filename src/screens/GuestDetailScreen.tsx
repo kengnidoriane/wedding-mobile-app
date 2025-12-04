@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Alert, TextInput } from 'react-native';
 import { useRoute, RouteProp, useNavigation } from '@react-navigation/native';
 import { theme } from '../styles/theme';
 import { RootStackParamList } from '../navigation/AppNavigator';
@@ -8,10 +8,12 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 import { LoadingButton } from '../components/LoadingButton';
 import Button from '../components/Button';
 import Card from '../components/Card';
+import ValidatedTextInput from '../components/ValidatedTextInput';
 import { CheckIcon } from '../components/icons/CheckIcon';
 import { ClockIcon } from '../components/icons/ClockIcon';
 import { QRIcon } from '../components/icons/QRIcon';
 import { TrashIcon } from '../components/icons/TrashIcon';
+import { validationService } from '../services/validationService';
 
 type GuestDetailScreenRouteProp = RouteProp<RootStackParamList, 'Détails invité'>;
 
@@ -26,6 +28,7 @@ export default function GuestDetailScreen() {
     markPresent, 
     markAbsent, 
     deleteGuest,
+    updateGuest,
     isLoading 
   } = useFirebaseGuests();
 
@@ -33,6 +36,87 @@ export default function GuestDetailScreen() {
     guests.find(g => g.id === guestId), 
     [guests, guestId]
   );
+
+  // État pour le mode édition
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedFullName, setEditedFullName] = useState('');
+  const [editedTableName, setEditedTableName] = useState('');
+  const [editedCompanions, setEditedCompanions] = useState('');
+
+  // Initialiser les champs d'édition
+  const startEditing = () => {
+    if (!guest) return;
+    setEditedFullName(guest.fullName);
+    setEditedTableName(guest.tableName);
+    setEditedCompanions(guest.companions.toString());
+    setIsEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setIsEditing(false);
+    setEditedFullName('');
+    setEditedTableName('');
+    setEditedCompanions('');
+  };
+
+  const saveChanges = async () => {
+    if (!guest) return;
+
+    const updatedData = {
+      fullName: editedFullName.trim(),
+      tableName: editedTableName.trim(),
+      companions: parseInt(editedCompanions, 10) || 0
+    };
+
+    // Validation
+    const validation = validationService.validateCreateGuest(updatedData);
+    if (!validation.isValid) {
+      Alert.alert(
+        'Erreur de validation',
+        validationService.formatValidationErrors(validation.errors)
+      );
+      return;
+    }
+
+    // Vérifier les doublons (sauf si c'est le même nom)
+    if (updatedData.fullName.toLowerCase() !== guest.fullName.toLowerCase()) {
+      const isDuplicate = guests.some(
+        g => g.id !== guest.id && g.fullName.toLowerCase() === updatedData.fullName.toLowerCase()
+      );
+      
+      if (isDuplicate) {
+        Alert.alert(
+          'Doublon détecté',
+          `Un invité avec le nom "${updatedData.fullName}" existe déjà. Voulez-vous continuer ?`,
+          [
+            { text: 'Annuler', style: 'cancel' },
+            {
+              text: 'Continuer',
+              onPress: async () => {
+                await performUpdate(updatedData);
+              }
+            }
+          ]
+        );
+        return;
+      }
+    }
+
+    await performUpdate(updatedData);
+  };
+
+  const performUpdate = async (updatedData: any) => {
+    if (!guest) return;
+    
+    try {
+      await updateGuest(guest.id, updatedData);
+      setIsEditing(false);
+      Alert.alert('Succès', 'Les informations ont été mises à jour');
+    } catch (error) {
+      console.error('Error updating guest:', error);
+      Alert.alert('Erreur', 'Impossible de mettre à jour les informations');
+    }
+  };
 
   const handleTogglePresence = async () => {
     if (!guest) return;
@@ -146,27 +230,110 @@ export default function GuestDetailScreen() {
 
         {/* Informations */}
         <Card style={styles.infoCard}>
-          <Text style={styles.sectionTitle}>Informations</Text>
-          
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Table</Text>
-            <Text style={styles.infoValue}>{guest.tableName}</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Informations</Text>
+            {!isEditing && (
+              <TouchableOpacity onPress={startEditing}>
+                <Text style={styles.editButton}>✏️ Modifier</Text>
+              </TouchableOpacity>
+            )}
           </View>
           
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Accompagnants</Text>
-            <Text style={styles.infoValue}>
-              {guest.companions > 0 
-                ? `${guest.companions} personne${guest.companions > 1 ? 's' : ''}`
-                : 'Aucun'
-              }
-            </Text>
-          </View>
-          
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Total personnes</Text>
-            <Text style={styles.infoValue}>{1 + guest.companions}</Text>
-          </View>
+          {!isEditing ? (
+            <>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Nom complet</Text>
+                <Text style={styles.infoValue}>{guest.fullName}</Text>
+              </View>
+              
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Table</Text>
+                <Text style={styles.infoValue}>{guest.tableName}</Text>
+              </View>
+              
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Accompagnants</Text>
+                <Text style={styles.infoValue}>
+                  {guest.companions > 0 
+                    ? `${guest.companions} personne${guest.companions > 1 ? 's' : ''}`
+                    : 'Aucun'
+                  }
+                </Text>
+              </View>
+              
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Total personnes</Text>
+                <Text style={styles.infoValue}>{1 + guest.companions}</Text>
+              </View>
+            </>
+          ) : (
+            <>
+              <View style={styles.editField}>
+                <Text style={styles.editLabel}>Nom complet *</Text>
+                <TextInput
+                  style={styles.editInput}
+                  value={editedFullName}
+                  onChangeText={setEditedFullName}
+                  placeholder="Nom complet"
+                  placeholderTextColor="#8E8E93"
+                />
+                {editedFullName.trim() && validationService.validateField('fullName', editedFullName)?.message && (
+                  <Text style={styles.errorText}>
+                    {validationService.validateField('fullName', editedFullName)?.message}
+                  </Text>
+                )}
+              </View>
+              
+              <View style={styles.editField}>
+                <Text style={styles.editLabel}>Table *</Text>
+                <TextInput
+                  style={styles.editInput}
+                  value={editedTableName}
+                  onChangeText={setEditedTableName}
+                  placeholder="Nom de la table"
+                  placeholderTextColor="#8E8E93"
+                />
+                {editedTableName.trim() && validationService.validateField('tableName', editedTableName)?.message && (
+                  <Text style={styles.errorText}>
+                    {validationService.validateField('tableName', editedTableName)?.message}
+                  </Text>
+                )}
+              </View>
+              
+              <View style={styles.editField}>
+                <Text style={styles.editLabel}>Accompagnants *</Text>
+                <TextInput
+                  style={styles.editInput}
+                  value={editedCompanions}
+                  onChangeText={setEditedCompanions}
+                  placeholder="0"
+                  keyboardType="numeric"
+                  placeholderTextColor="#8E8E93"
+                />
+                {editedCompanions.trim() && validationService.validateField('companions', parseInt(editedCompanions) || 0)?.message && (
+                  <Text style={styles.errorText}>
+                    {validationService.validateField('companions', parseInt(editedCompanions) || 0)?.message}
+                  </Text>
+                )}
+              </View>
+              
+              <View style={styles.editActions}>
+                <Button
+                  title="Annuler"
+                  onPress={cancelEditing}
+                  variant="outline"
+                  size="md"
+                />
+                <LoadingButton
+                  title="Enregistrer"
+                  onPress={saveChanges}
+                  variant="primary"
+                  size="md"
+                  loading={isLoading('updateGuest')}
+                />
+              </View>
+            </>
+          )}
         </Card>
 
         {/* Actions */}
@@ -260,11 +427,21 @@ const styles = StyleSheet.create({
   infoCard: {
     margin: theme.spacing.lg,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: theme.spacing.md,
+  },
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: '#000000',
-    marginBottom: theme.spacing.md,
+  },
+  editButton: {
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: '600',
   },
   infoRow: {
     flexDirection: 'row',
@@ -298,5 +475,29 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: theme.colors.textSecondary,
     marginBottom: theme.spacing.lg,
+  },
+  editField: {
+    marginBottom: theme.spacing.md,
+  },
+  editLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000000',
+    marginBottom: 8,
+  },
+  editInput: {
+    backgroundColor: '#F2F2F7',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#000000',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  editActions: {
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+    marginTop: theme.spacing.md,
   },
 });
