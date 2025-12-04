@@ -159,15 +159,21 @@ export default function GuestListScreen({ navigation }: any) {
         
         Papa.parse(fileContent, {
           header: true,
+          skipEmptyLines: true,
           complete: async (results: any) => {
             const rawGuests: CreateGuestData[] = [];
             
             for (const row of results.data) {
-              if (row.nom && row.table) {
+              // Support pour les colonnes en français ET en anglais
+              const fullName = row.fullName || row.nom;
+              const tableName = row.tableName || row.table;
+              const companions = row.companions || row.accompagnants;
+              
+              if (fullName && tableName) {
                 rawGuests.push({
-                  fullName: row.nom,
-                  tableName: row.table,
-                  companions: parseInt(row.accompagnants) || 0
+                  fullName: fullName.trim(),
+                  tableName: tableName.trim(),
+                  companions: parseInt(companions) || 0
                 });
               }
             }
