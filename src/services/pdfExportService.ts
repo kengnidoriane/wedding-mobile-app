@@ -1,6 +1,6 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system';
+import { File, Paths } from 'expo-file-system';
 import { Guest } from '../types/guest';
 
 export interface ExportOptions {
@@ -278,15 +278,12 @@ class PDFExportService {
   }
 
   async saveToDevice(uri: string, filename: string = 'liste-invites.pdf') {
-    const documentsDir = FileSystem.documentDirectory;
-    const newUri = `${documentsDir}${filename}`;
+    const sourceFile = new File(uri);
+    const destinationFile = new File(Paths.document, filename);
     
-    await FileSystem.copyAsync({
-      from: uri,
-      to: newUri
-    });
+    sourceFile.copy(destinationFile);
     
-    return newUri;
+    return destinationFile.uri;
   }
 }
 

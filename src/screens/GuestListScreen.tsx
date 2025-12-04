@@ -2,7 +2,7 @@ import React, { useMemo, useState, useCallback } from 'react';
 import { View, Text, FlatList, StyleSheet, TextInput, TouchableOpacity, RefreshControl, Modal, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+import { File } from 'expo-file-system';
 import Papa from 'papaparse';
 import { theme } from '../styles/theme';
 import Button from '../components/Button';
@@ -154,7 +154,8 @@ export default function GuestListScreen({ navigation }: any) {
 
       if (!result.canceled && result.assets[0]) {
         const fileUri = result.assets[0].uri;
-        const fileContent = await FileSystem.readAsStringAsync(fileUri);
+        const file = new File(fileUri);
+        const fileContent = await file.text();
         
         Papa.parse(fileContent, {
           header: true,
