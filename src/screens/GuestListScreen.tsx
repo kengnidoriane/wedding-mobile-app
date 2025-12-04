@@ -127,27 +127,6 @@ export default function GuestListScreen({ navigation }: any) {
 
 
 
-  const handleDeleteGuest = async (id: string, name: string) => {
-    Alert.alert(
-      'Confirmer la suppression',
-      `Voulez-vous vraiment supprimer ${name} ?`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        { 
-          text: 'Supprimer', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteGuestFirebase(id);
-            } catch (error) {
-              console.error('Error deleting guest:', error);
-            }
-          }
-        }
-      ]
-    );
-  };
-
   const toggleSelectionMode = () => {
     setSelectionMode(!selectionMode);
     setSelectedGuests(new Set());
@@ -212,34 +191,6 @@ export default function GuestListScreen({ navigation }: any) {
 
   const deselectAll = () => {
     setSelectedGuests(new Set());
-  };
-
-  const toggleGuestPresence = async (id: string, name: string, isCurrentlyPresent: boolean) => {
-    const action = isCurrentlyPresent ? 'absent' : 'présent';
-    const emoji = isCurrentlyPresent ? '⏳' : '✅';
-    
-    Alert.alert(
-      'Confirmer le changement de statut',
-      `Voulez-vous marquer ${name} comme ${action} ?`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: `${emoji} Marquer ${action}`,
-          style: 'default',
-          onPress: async () => {
-            try {
-              if (!isCurrentlyPresent) {
-                await markPresent(id);
-              } else {
-                await markAbsent(id);
-              }
-            } catch (error) {
-              console.error('Error in toggleGuestPresence:', error);
-            }
-          }
-        }
-      ]
-    );
   };
 
   const handleImportCSV = async () => {
@@ -334,23 +285,20 @@ export default function GuestListScreen({ navigation }: any) {
     totalCompanions: stats?.totalCompanions || 0
   }), [stats]);
 
-  const handleShareQR = useCallback((guestId: string) => {
-    navigation.navigate('QRWhatsAppShare', { guestId });
+  const handleGuestPress = useCallback((guestId: string) => {
+    navigation.navigate('Détails invité', { guestId });
   }, [navigation]);
 
   const renderGuestItem = useCallback(({ item }: { item: any }) => (
     <GuestItem
       guest={item}
-      onTogglePresence={toggleGuestPresence}
-      onDelete={handleDeleteGuest}
-      onShareQR={handleShareQR}
-      isLoading={isLoading}
       selectionMode={selectionMode}
       isSelected={selectedGuests.has(item.id)}
+      onPress={handleGuestPress}
       onToggleSelection={toggleGuestSelection}
       onLongPress={handleLongPress}
     />
-  ), [toggleGuestPresence, handleDeleteGuest, handleShareQR, isLoading, selectionMode, selectedGuests, toggleGuestSelection, handleLongPress]);
+  ), [selectionMode, selectedGuests, handleGuestPress, toggleGuestSelection, handleLongPress]);
 
   const keyExtractor = useCallback((item: any) => item.id.toString(), []);
 

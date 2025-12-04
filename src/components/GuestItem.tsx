@@ -4,52 +4,42 @@
 
 import React, { memo, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { theme } from '../styles/theme';
-import Card from './Card';
-import { LoadingButton } from './LoadingButton';
-import Button from './Button';
 import { Guest } from '../types/guest';
 import { CheckIcon } from './icons/CheckIcon';
 import { ClockIcon } from './icons/ClockIcon';
-import { QRIcon } from './icons/QRIcon';
-import { TrashIcon } from './icons/TrashIcon';
 
 interface GuestItemProps {
   guest: Guest;
-  onTogglePresence: (id: string, name: string, isPresent: boolean) => void;
-  onDelete: (id: string, name: string) => void;
-  onShareQR: (id: string) => void;
-  isLoading: (key?: string) => boolean;
   selectionMode?: boolean;
   isSelected?: boolean;
+  onPress?: (id: string) => void;
   onToggleSelection?: (id: string) => void;
   onLongPress?: (id: string) => void;
 }
 
 const GuestItem = memo<GuestItemProps>(function GuestItem({
   guest,
-  onTogglePresence,
-  onDelete,
-  onShareQR,
-  isLoading,
   selectionMode = false,
   isSelected = false,
+  onPress,
   onToggleSelection,
   onLongPress
 }) {
-  const statusBadgeStyle = useMemo(() => [
-    styles.statusBadge,
-    guest.isPresent ? styles.presentBadge : styles.absentBadge
-  ], [guest.isPresent]);
-
   const cardStyle = useMemo(() => [
     styles.guestCard,
     isSelected && styles.selectedCard
   ], [isSelected]);
 
+  const statusBadgeStyle = useMemo(() => [
+    styles.statusBadge,
+    guest.isPresent ? styles.presentBadge : styles.absentBadge
+  ], [guest.isPresent]);
+
   const handlePress = () => {
     if (selectionMode) {
       onToggleSelection?.(guest.id);
+    } else {
+      onPress?.(guest.id);
     }
   };
 
@@ -78,43 +68,19 @@ const GuestItem = memo<GuestItemProps>(function GuestItem({
       </View>
       
       <View style={styles.guestContent}>
-        <View style={styles.guestHeader}>
-          <Text style={styles.guestName}>{guest.fullName}</Text>
-          <Text style={styles.timestamp}>Table {guest.tableName}</Text>
-        </View>
+        <Text style={styles.guestName}>{guest.fullName}</Text>
         
         <View style={styles.guestFooter}>
           <Text style={styles.guestMessage}>
-            {guest.companions > 0 ? `${guest.companions} accompagnant(s)` : 'Sans accompagnant'}
+            {guest.companions > 0 ? `${guest.companions} accompagnant${guest.companions > 1 ? 's' : ''}` : 'Sans accompagnant'}
           </Text>
           
-          <View style={styles.guestActions}>
-            <TouchableOpacity 
-              style={statusBadgeStyle}
-              onPress={() => onTogglePresence(guest.id, guest.fullName, guest.isPresent)}
-              disabled={isLoading('markPresent') || isLoading('markAbsent')}
-            >
-              {guest.isPresent ? (
-                <CheckIcon size={16} color="#FFFFFF" />
-              ) : (
-                <ClockIcon size={16} color="#FFFFFF" />
-              )}
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.qrButton}
-              onPress={() => onShareQR(guest.id)}
-            >
-              <QRIcon size={14} color="#FFFFFF" />
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.deleteButton}
-              onPress={() => onDelete(guest.id, guest.fullName)}
-              disabled={isLoading('deleteGuest')}
-            >
-              <TrashIcon size={14} color="#FFFFFF" />
-            </TouchableOpacity>
+          <View style={statusBadgeStyle}>
+            {guest.isPresent ? (
+              <CheckIcon size={14} color="#FFFFFF" />
+            ) : (
+              <ClockIcon size={14} color="#FFFFFF" />
+            )}
           </View>
         </View>
       </View>
@@ -168,41 +134,29 @@ const styles = StyleSheet.create({
   },
   guestContent: {
     flex: 1,
-  },
-  guestHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
+    justifyContent: 'center',
   },
   guestName: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
     color: '#000000',
-  },
-  timestamp: {
-    fontSize: 14,
-    color: '#8E8E93',
+    marginBottom: 4,
   },
   guestFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 2,
   },
   guestMessage: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#8E8E93',
     flex: 1,
   },
-  guestActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
   statusBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#F2F2F7',
@@ -211,22 +165,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#34C759',
   },
   absentBadge: {
-    backgroundColor: '#FF3B30',
-  },
-  qrButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#007AFF',
-  },
-  deleteButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
     backgroundColor: '#FF3B30',
   },
 });
