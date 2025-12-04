@@ -21,18 +21,17 @@ class NotificationService {
   };
 
   async initialize() {
-    // Configure notification behavior (updated API)
+    // Load settings first
+    await this.loadSettings();
+
+    // Configure notification behavior (latest API)
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
-        shouldShowBanner: true,  // Remplace shouldShowAlert
-        shouldShowList: true,     // Affiche dans la liste des notifications
+        shouldShowAlert: true,
         shouldPlaySound: this.settings.sound,
         shouldSetBadge: false,
       }),
     });
-
-    // Load settings
-    await this.loadSettings();
 
     // Request permissions
     await this.requestPermissions();
@@ -77,8 +76,6 @@ class NotificationService {
           guestId: guest.id,
           timestamp: new Date().toISOString()
         },
-        sound: this.settings.sound,
-        vibrate: this.settings.vibration ? [0, 250, 250, 250] : undefined,
       },
       trigger: null, // Immediate
     });
