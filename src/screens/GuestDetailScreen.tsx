@@ -404,6 +404,8 @@ const styles = StyleSheet.create({
     color: '#000000',
     marginBottom: theme.spacing.md,
     textAlign: 'center',
+    flexWrap: 'wrap',
+    paddingHorizontal: theme.spacing.md,
   },
   statusBadge: {
     flexDirection: 'row',
