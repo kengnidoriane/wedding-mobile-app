@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert, SafeAreaView, Dimensions } from 'react-native';
 import { PieChart } from 'react-native-chart-kit';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system';
+import { File, Paths } from 'expo-file-system';
 import { theme } from '../styles/theme';
 import Button from '../components/Button';
 import Card from '../components/Card';
@@ -70,12 +70,12 @@ export default function DashboardScreen() {
       };
 
       const fileContent = JSON.stringify(exportData, null, 2);
-      const fileUri = `${FileSystem.documentDirectory}wedding-guests-export.json`;
+      const file = new File(Paths.document, 'wedding-guests-export.json');
 
-      await FileSystem.writeAsStringAsync(fileUri, fileContent);
+      await file.write(fileContent);
 
       if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri, {
+        await Sharing.shareAsync(file.uri, {
           mimeType: 'application/json',
           dialogTitle: 'Exporter les données des invités'
         });
