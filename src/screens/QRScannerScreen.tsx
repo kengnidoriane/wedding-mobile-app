@@ -91,24 +91,9 @@ export default function QRScannerScreen() {
           await markPresent(guest.id);
           console.log('📱 QR Scanner: markPresent completed');
           
-          // Calculer le nombre total de personnes (invité + accompagnants)
-          const totalPersons = 1 + guest.companions;
-          
-          // Afficher le succès avec détails complets
-          Alert.alert(
-            '✅ Entrée autorisée !',
-            `🎉 Bienvenue ${guest.fullName} !\n\n📋 Détails confirmés :\n📍 Table : ${guest.tableName}\n👥 Total personnes : ${totalPersons} (vous + ${guest.companions} accompagnant${guest.companions > 1 ? 's' : ''})\n\n✅ Présence enregistrée avec succès !`,
-            [
-              {
-                text: 'Parfait !',
-                style: 'default'
-              }
-            ]
-          );
+          // Afficher les détails de l'invité dans la modal (pas d'alerte)
+          setShowModal(true);
         }
-        
-        // Afficher les détails de l'invité
-        setShowModal(true);
       } else {
         Alert.alert(
           '❌ Invité non trouvé',
@@ -154,26 +139,19 @@ export default function QRScannerScreen() {
     setSearchQuery('');
     setSearchResults([]);
     
-    // Marquer automatiquement comme présent
+    // Marquer automatiquement comme présent si pas déjà présent
     if (!guest.isPresent) {
       try {
         await markPresent(guest.id);
-        Alert.alert(
-          '✅ Présence confirmée !',
-          `${guest.fullName} a été marqué(e) comme présent(e).`
-        );
       } catch (error) {
         showAlert(error, 'marquage présence');
+        return;
       }
-    } else {
-      Alert.alert(
-        'ℹ️ Déjà présent',
-        `${guest.fullName} était déjà marqué(e) comme présent(e).`
-      );
     }
     
+    // Afficher la modal avec les détails (pas d'alerte)
     setShowModal(true);
-  }, [markPresent]);
+  }, [markPresent, showAlert]);
 
   const closeModal = useCallback(() => {
     setShowModal(false);
@@ -264,35 +242,61 @@ export default function QRScannerScreen() {
       >
         <View style={styles.modalOverlay}>
           <Card style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              {currentGuest?.isPresent ? '✅ Invité Présent' : '🎉 Invité Détecté'}
-            </Text>
-            
             {currentGuest && (
               <>
+                {/* En-tête avec statut */}
+                <View style={[
+                  styles.statusHeader,
+                  { backgroundColor: currentGuest.isPresent ? '#34C759' : '#FF9500' }
+                ]}>
+                  <Text style={styles.statusIcon}>
+                    {currentGuest.isPresent ? '✅' : '⚠️'}
+                  </Text>
+                  <Text style={styles.statusTitle}>
+                    {currentGuest.isPresent ? 'Entrée autorisée !' : 'Invité détecté'}
+                  </Text>
+                </View>
+
+                {/* Informations de l'invité */}
                 <View style={styles.guestInfoContainer}>
+                  <Text style={styles.welcomeText}>
+                    {currentGuest.isPresent ? '🎉 Bienvenue !' : '👤 Invité'}
+                  </Text>
                   <Text style={styles.guestName}>{currentGuest.fullName}</Text>
+                  
                   <View style={styles.guestDetails}>
-                    <Text style={styles.guestDetail}>📍 Table : {currentGuest.tableName}</Text>
-                    <Text style={styles.guestDetail}>👥 Accompagnants : {currentGuest.companions}</Text>
-                    <Text style={[
-                      styles.guestDetail, 
-                      { 
-                        color: currentGuest.isPresent ? theme.colors.success : theme.colors.error,
-                        fontWeight: '600'
-                      }
-                    ]}>
-                      {currentGuest.isPresent ? '✅ Présent' : '⏳ Absent'}
-                    </Text>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailIcon}>📍</Text>
+                      <Text style={styles.detailLabel}>Table :</Text>
+                      <Text style={styles.detailValue}>{currentGuest.tableName}</Text>
+                    </View>
+                    
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailIcon}>👥</Text>
+                      <Text style={styles.detailLabel}>Total personnes :</Text>
+                      <Text style={styles.detailValue}>
+                        {1 + currentGuest.companions} 
+                        {currentGuest.companions > 0 && ` (vous + ${currentGuest.companions})`}
+                      </Text>
+                    </View>
                   </View>
+
+                  {currentGuest.isPresent && (
+                    <View style={styles.successBanner}>
+                      <Text style={styles.successText}>
+                        ✅ Présence enregistrée avec succès !
+                      </Text>
+                    </View>
+                  )}
                 </View>
 
                 <View style={styles.buttonContainer}>
                   <Button 
-                    title="Fermer"
+                    title="Parfait !"
                     onPress={closeModal}
                     icon="👍"
                     variant="primary"
+                    size="lg"
                   />
                 </View>
               </>
@@ -458,33 +462,80 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     width: '100%',
-    alignItems: 'center',
+    padding: 0,
+    overflow: 'hidden',
   },
-  modalTitle: {
-    ...theme.typography.h2,
-    color: theme.colors.text,
-    marginBottom: theme.spacing.lg,
+  statusHeader: {
+    alignItems: 'center',
+    paddingVertical: theme.spacing.xl,
+    paddingHorizontal: theme.spacing.lg,
+  },
+  statusIcon: {
+    fontSize: 48,
+    marginBottom: theme.spacing.sm,
+  },
+  statusTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
   },
   guestInfoContainer: {
     alignItems: 'center',
-    marginBottom: theme.spacing.xl,
-    padding: theme.spacing.lg,
+    paddingVertical: theme.spacing.xl,
+    paddingHorizontal: theme.spacing.lg,
+  },
+  welcomeText: {
+    fontSize: 18,
+    color: theme.colors.textSecondary,
+    marginBottom: theme.spacing.xs,
+  },
+  guestName: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: theme.colors.text,
+    marginBottom: theme.spacing.lg,
+    textAlign: 'center',
+  },
+  guestDetails: {
+    width: '100%',
+    gap: theme.spacing.md,
+    marginBottom: theme.spacing.lg,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: theme.colors.background,
+    padding: theme.spacing.md,
+    borderRadius: theme.borderRadius.md,
+  },
+  detailIcon: {
+    fontSize: 20,
+    marginRight: theme.spacing.sm,
+  },
+  detailLabel: {
+    fontSize: 16,
+    color: theme.colors.textSecondary,
+    marginRight: theme.spacing.xs,
+  },
+  detailValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.text,
+    flex: 1,
+  },
+  successBanner: {
+    backgroundColor: '#E8F5E9',
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
     borderRadius: theme.borderRadius.md,
     width: '100%',
   },
-  guestName: {
-    ...theme.typography.h3,
-    color: theme.colors.text,
-    marginBottom: theme.spacing.md,
-  },
-  guestDetails: {
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-  },
-  guestDetail: {
-    ...theme.typography.body,
-    color: theme.colors.textSecondary,
+  successText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2E7D32',
+    textAlign: 'center',
   },
   buttonContainer: {
     flexDirection: 'row',
