@@ -14,7 +14,6 @@ expo-env.d.ts
 .idea/
 .vscode/s
 .gradle/
-.kiro/
 .cxx/
 *.orig.*
 *.jks
